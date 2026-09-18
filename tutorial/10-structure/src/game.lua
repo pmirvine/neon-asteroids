@@ -1,0 +1,562 @@
+--[[ game.lua — Neon Asteroids gameplay: modes, entities, collisions, drawing.
+
+The world is a fixed 1280 x 720 virtual screen that wraps at every edge;
+main.lua scales it to the window. Modes: "title" (attract mode), "play",
+"gameover".
+]]
+
+local lg = love.graphics
+local rnd = love.math.random
+local TAU = math.pi * 2
+
+local Game = {}
+local W, H = 1280, 720
+Game.W, Game.H = W, H
+
+-- ============================================================
+-- TUNING
+-- ============================================================
+local SHIP_RADIUS = 13
+local SHIP_TURN = 4.6 -- radians per second
+local SHIP_THRUST = 430
+local SHIP_DRAG = 0.5 -- velocity decay rate per second
+local SHIP_MAX_SPEED = 540
+local SHIP_SHAPE = { 20, 0, -13, -12, -7, 0, -13, 12 }
+local SHIP_COLOR = { 0.25, 0.95, 1 }
+
+local FIRE_INTERVAL = 0.14 -- hold fire for autofire at this rate
+local BULLET_SPEED = 780
+local BULLET_LIFE = 0.8
+local MAX_PLAYER_BULLETS = 8
+local BULLET_COLOR = { 1, 0.95, 0.5 }
+
+local START_LIVES = 3
+local MAX_LIVES = 9
+local EXTRA_LIFE_EVERY = 10000
+local RESPAWN_DELAY = 2.2
+local SPAWN_INVULN = 2.5
+
+local ASTEROID = {
+    [3] = { radius = 54, score = 20, speedLo = 35, speedHi = 75 },
+    [2] = { radius = 29, score = 50, speedLo = 55, speedHi = 115 },
+    [1] = { radius = 15, score = 100, speedLo = 75, speedHi = 165 },
+}
+local ASTEROID_COLOR = { 1, 0.4, 0.85 }
+
+local S = {} -- all mutable game state
+
+-- ============================================================
+-- HELPERS
+-- ============================================================
+local function wrapDelta(d, size)
+    if d > size / 2 then return d - size end
+    if d < -size / 2 then return d + size end
+    return d
+end
+
+-- Distance on the wrapping playfield, plus the shortest dx, dy from a to b.
+local function wrappedDist(ax, ay, bx, by)
+    local dx, dy = wrapDelta(bx - ax, W), wrapDelta(by - ay, H)
+    return math.sqrt(dx * dx + dy * dy), dx, dy
+end
+
+-- Rotate + translate a flat local shape into `out` (world space).
+local function transform(shape, x, y, angle, out, scale)
+    scale = scale or 1
+    local c, s = math.cos(angle) * scale, math.sin(angle) * scale
+    for i = 1, #shape, 2 do
+        local px, py = shape[i], shape[i + 1]
+        out[i] = x + px * c - py * s
+        out[i + 1] = y + px * s + py * c
+    end
+    return out
+end
+
+-- Draw fn(obj) once, plus shifted copies when obj straddles a screen edge.
+local function drawWrapped(x, y, r, fn, obj)
+    local x2 = (x < r and W) or (x > W - r and -W) or nil
+    local y2 = (y < r and H) or (y > H - r and -H) or nil
+    fn(obj)
+    if x2 then lg.push(); lg.translate(x2, 0); fn(obj); lg.pop() end
+    if y2 then lg.push(); lg.translate(0, y2); fn(obj); lg.pop() end
+    if x2 and y2 then lg.push(); lg.translate(x2, y2); fn(obj); lg.pop() end
+end
+
+local function loadHighScore()
+    local ok, data = pcall(love.filesystem.read, "highscore.txt")
+    return ok and tonumber(data) or 0
+end
+
+local function saveHighScore(score)
+    pcall(love.filesystem.write, "highscore.txt", tostring(score))
+end
+
+-- Text with LÖVE's built-in font, one cached Font object per size.
+-- (Chapter 17 swaps this for a glowing vector font with the same arguments.)
+local fonts = {}
+local function drawText(str, x, y, size, r, g, b, a, align)
+    local px = math.floor(size * 1.4)
+    fonts[px] = fonts[px] or lg.newFont(px)
+    lg.setFont(fonts[px])
+    lg.setColor(r, g, b, a or 1)
+    if align == "center" then
+        lg.printf(str, x - W, y, W * 2, "center")
+    elseif align == "right" then
+        lg.printf(str, x - W, y, W, "right")
+    else
+        lg.print(str, x, y)
+    end
+end
+
+-- ============================================================
+-- ENTITIES
+-- ============================================================
+local function newAsteroid(size, x, y)
+    local def = ASTEROID[size]
+    local n = rnd(10, 14)
+    local verts = {}
+    for i = 0, n - 1 do
+        local ang = (i + (rnd() - 0.5) * 0.5) / n * TAU
+        local rad = def.radius * (0.7 + rnd() * 0.35)
+        verts[#verts + 1] = math.cos(ang) * rad
+        verts[#verts + 1] = math.sin(ang) * rad
+    end
+    local ang = rnd() * TAU
+    local speed = (def.speedLo + rnd() * (def.speedHi - def.speedLo)) * (1 + (S.wave - 1) * 0.05)
+    local c = ASTEROID_COLOR
+    return {
+        x = x, y = y,
+        vx = math.cos(ang) * speed, vy = math.sin(ang) * speed,
+        size = size, radius = def.radius,
+        angle = rnd() * TAU, spin = (rnd() - 0.5) * (0.8 + (3 - size) * 0.6),
+        verts = verts, pts = {},
+        r = c[1], g = c[2], b = c[3],
+    }
+end
+
+local function asteroidPoints(a)
+    return transform(a.verts, a.x, a.y, a.angle, a.pts)
+end
+
+local function newShip()
+    return {
+        x = W / 2, y = H / 2, vx = 0, vy = 0, angle = -math.pi / 2,
+        alive = true, invuln = SPAWN_INVULN,
+        fireTimer = 0, thrusting = false, pts = {},
+    }
+end
+
+local function shipPoints(s)
+    return transform(SHIP_SHAPE, s.x, s.y, s.angle, s.pts)
+end
+
+local function isClear(x, y, margin)
+    for _, a in ipairs(S.asteroids) do
+        if wrappedDist(x, y, a.x, a.y) < a.radius + margin then return false end
+    end
+    return true
+end
+
+local function popup(text, x, y, r, g, b, size)
+    S.popups[#S.popups + 1] = { text = text, x = x, y = y, life = 1.1, max = 1.1, r = r, g = g, b = b, size = size or 14 }
+end
+
+local function addScore(points, x, y, r, g, b)
+    if S.mode ~= "play" then return end
+    S.score = S.score + points
+    popup(tostring(points), x, y, r, g, b)
+    while S.score >= S.nextLife do
+        S.nextLife = S.nextLife + EXTRA_LIFE_EVERY
+        S.lives = math.min(S.lives + 1, MAX_LIVES)
+        S.banner = { text = "EXTRA SHIP", t = 0 }
+    end
+end
+
+-- ============================================================
+-- DESTRUCTION
+-- ============================================================
+local function destroyAsteroid(i, scored, split, hitVx, hitVy)
+    local a = table.remove(S.asteroids, i)
+    local def = ASTEROID[a.size]
+    if scored then addScore(def.score, a.x, a.y, a.r, a.g, a.b) end
+
+    if split and a.size > 1 then
+        for _ = 1, 2 do
+            local child = newAsteroid(a.size - 1,
+                a.x + (rnd() - 0.5) * a.radius * 0.6,
+                a.y + (rnd() - 0.5) * a.radius * 0.6)
+            child.vx = child.vx + a.vx * 0.5 + (hitVx or 0) * 0.04
+            child.vy = child.vy + a.vy * 0.5 + (hitVy or 0) * 0.04
+            S.asteroids[#S.asteroids + 1] = child
+        end
+    end
+end
+
+local function killShip()
+    local s = S.ship
+    s.alive = false
+    S.lives = S.lives - 1
+    S.respawnTimer = RESPAWN_DELAY
+end
+
+-- ============================================================
+-- PLAYER ACTIONS
+-- ============================================================
+local function fire()
+    local s = S.ship
+    if #S.bullets >= MAX_PLAYER_BULLETS then return end
+
+    local c, sn = math.cos(s.angle), math.sin(s.angle)
+    local x, y = s.x + c * 20, s.y + sn * 20
+    S.bullets[#S.bullets + 1] = {
+        x = x, y = y,
+        vx = c * BULLET_SPEED + s.vx, vy = sn * BULLET_SPEED + s.vy,
+        life = BULLET_LIFE,
+    }
+    s.fireTimer = FIRE_INTERVAL
+end
+
+-- ============================================================
+-- WAVES AND MODES
+-- ============================================================
+local function spawnWave()
+    local count = math.min(3 + S.wave, 11)
+    local cx, cy = W / 2, H / 2
+    if S.ship and S.ship.alive then cx, cy = S.ship.x, S.ship.y end
+    for _ = 1, count do
+        local x, y
+        for _ = 1, 30 do
+            x, y = rnd() * W, rnd() * H
+            if wrappedDist(x, y, cx, cy) > 280 then break end
+        end
+        S.asteroids[#S.asteroids + 1] = newAsteroid(3, x, y)
+    end
+    S.waveTime = 0
+    S.banner = { text = "WAVE " .. S.wave, t = 0 }
+end
+
+local function resetState()
+    S.asteroids, S.bullets, S.popups = {}, {}, {}
+    S.banner, S.waveDelay = nil, nil
+    S.modeTime = 0
+end
+
+local function enterTitle()
+    resetState()
+    S.mode = "title"
+    S.wave = 1
+    S.ship = nil
+    for _ = 1, 7 do
+        S.asteroids[#S.asteroids + 1] = newAsteroid(rnd(1, 3), rnd() * W, rnd() * H)
+    end
+end
+
+local function startGame()
+    resetState()
+    S.mode = "play"
+    S.score, S.lives, S.wave = 0, START_LIVES, 1
+    S.nextLife = EXTRA_LIFE_EVERY
+    S.ship = newShip()
+    S.respawnTimer = 0
+    spawnWave()
+end
+
+local function enterGameOver()
+    S.mode = "gameover"
+    S.modeTime = 0
+    S.newHigh = S.score > S.high
+    if S.newHigh then
+        S.high = S.score
+        saveHighScore(S.high)
+    end
+end
+
+-- ============================================================
+-- INPUT
+-- ============================================================
+local function controls()
+    local kb = love.keyboard.isDown
+    local left, right = kb("left", "a"), kb("right", "d")
+    local thrust, firing = kb("up", "w"), kb("space")
+    return left, right, thrust, firing
+end
+
+-- ============================================================
+-- UPDATE
+-- ============================================================
+local function updateShip(dt)
+    local s = S.ship
+    local left, right, thrust, firing = controls()
+    if left then s.angle = s.angle - SHIP_TURN * dt end
+    if right then s.angle = s.angle + SHIP_TURN * dt end
+
+    local c, sn = math.cos(s.angle), math.sin(s.angle)
+    s.thrusting = thrust
+    if thrust then
+        s.vx = s.vx + c * SHIP_THRUST * dt
+        s.vy = s.vy + sn * SHIP_THRUST * dt
+    end
+
+    local drag = math.exp(-SHIP_DRAG * dt)
+    s.vx, s.vy = s.vx * drag, s.vy * drag
+    local speed = math.sqrt(s.vx * s.vx + s.vy * s.vy)
+    if speed > SHIP_MAX_SPEED then
+        s.vx, s.vy = s.vx / speed * SHIP_MAX_SPEED, s.vy / speed * SHIP_MAX_SPEED
+    end
+    s.x = (s.x + s.vx * dt) % W
+    s.y = (s.y + s.vy * dt) % H
+
+    s.invuln = math.max(0, s.invuln - dt)
+    s.fireTimer = s.fireTimer - dt
+    if firing and s.fireTimer <= 0 then fire() end
+end
+
+local function moveAsteroids(dt)
+    for _, a in ipairs(S.asteroids) do
+        a.x = (a.x + a.vx * dt) % W
+        a.y = (a.y + a.vy * dt) % H
+        a.angle = a.angle + a.spin * dt
+    end
+end
+
+local function updateBullets(dt)
+    for i = #S.bullets, 1, -1 do
+        local b = S.bullets[i]
+        b.x = (b.x + b.vx * dt) % W
+        b.y = (b.y + b.vy * dt) % H
+        b.life = b.life - dt
+        if b.life <= 0 then table.remove(S.bullets, i) end
+    end
+end
+
+local function collide()
+    local s = S.ship
+    local shipAlive = s and s.alive
+
+    for i = #S.bullets, 1, -1 do
+        local b = S.bullets[i]
+        for j = #S.asteroids, 1, -1 do
+            local a = S.asteroids[j]
+            if wrappedDist(b.x, b.y, a.x, a.y) < a.radius * 0.9 + 2 then
+                destroyAsteroid(j, true, true, b.vx, b.vy)
+                table.remove(S.bullets, i)
+                break
+            end
+        end
+    end
+
+    if shipAlive and s.invuln <= 0 then
+        for j = #S.asteroids, 1, -1 do
+            local a = S.asteroids[j]
+            if wrappedDist(s.x, s.y, a.x, a.y) < a.radius * 0.85 + SHIP_RADIUS then
+                destroyAsteroid(j, true, true, s.vx, s.vy)
+                killShip()
+                break
+            end
+        end
+    end
+end
+
+local function updatePlay(dt)
+    S.waveTime = S.waveTime + dt
+    local s = S.ship
+
+    if s.alive then
+        updateShip(dt)
+    else
+        S.respawnTimer = S.respawnTimer - dt
+        if S.lives <= 0 then
+            if S.respawnTimer <= -0.5 then enterGameOver() return end
+        elseif S.respawnTimer <= 0 and (isClear(W / 2, H / 2, 150) or S.respawnTimer < -3) then
+            S.ship = newShip()
+        end
+    end
+
+    updateBullets(dt)
+    moveAsteroids(dt)
+    collide()
+
+    -- wave cleared: short breather, then the next wave
+    if #S.asteroids == 0 and not S.waveDelay then S.waveDelay = 2.5 end
+    if S.waveDelay then
+        S.waveDelay = S.waveDelay - dt
+        if S.waveDelay <= 0 then
+            S.waveDelay = nil
+            S.wave = S.wave + 1
+            spawnWave()
+        end
+    end
+end
+
+local function updateAttract(dt)
+    moveAsteroids(dt)
+end
+
+-- ============================================================
+-- DRAWING
+-- ============================================================
+local function drawAsteroid(a)
+    lg.setColor(a.r, a.g, a.b)
+    lg.polygon("line", a.pts)
+end
+
+local flame = {}
+local function drawShip(s)
+    local c = SHIP_COLOR
+    if s.invuln > 0 then
+        local pulse = 0.5 + 0.5 * math.sin(S.time * 12)
+        lg.setColor(c[1], c[2], c[3], 0.25 + 0.25 * pulse)
+        lg.circle("line", s.x, s.y, 27 + pulse * 2)
+    end
+    lg.setColor(c)
+    lg.polygon("line", s.pts)
+    if s.thrusting then
+        local len = 10 + rnd() * 14
+        transform({ -9, -5, -9 - len, 0, -9, 5 }, s.x, s.y, s.angle, flame)
+        lg.setColor(1, 0.45, 0.25)
+        lg.line(flame)
+    end
+end
+
+local function drawBullet(b)
+    lg.setColor(BULLET_COLOR)
+    lg.line(b.x, b.y, b.x - b.vx * 0.022, b.y - b.vy * 0.022)
+end
+
+local miniShip = {}
+local function drawHud()
+    drawText(tostring(S.score), 32, 26, 28, 1, 0.95, 0.85, 1, "left")
+    drawText("HI " .. S.high, W / 2, 30, 16, 0.65, 0.7, 1, 0.8, "center")
+    drawText("WAVE " .. S.wave, W - 32, 30, 16, 1, 0.5, 0.9, 0.9, "right")
+
+    lg.setColor(SHIP_COLOR)
+    for i = 1, S.lives do
+        transform(SHIP_SHAPE, 44 + (i - 1) * 26, 82, -math.pi / 2, miniShip, 0.6)
+        lg.polygon("line", miniShip)
+    end
+end
+
+local function drawPopups()
+    for _, p in ipairs(S.popups) do
+        drawText(p.text, p.x, p.y, p.size, p.r, p.g, p.b, p.life / p.max, "center")
+    end
+end
+
+local function drawBanner()
+    local b = S.banner
+    if not b then return end
+    local a = math.min(1, b.t * 4, (2.2 - b.t) * 2)
+    drawText(b.text, W / 2, H / 2 - 110, 40, 1, 0.6, 0.9, a, "center")
+end
+
+local function drawTitle()
+    local pulse = 0.8 + 0.2 * math.sin(S.time * 2.4)
+    drawText("NEON", W / 2, 120, 72, 0.3, 0.9, 1, pulse, "center")
+    drawText("ASTEROIDS", W / 2, 220, 72, 1, 0.35, 0.85, pulse, "center")
+
+    if math.floor(S.time * 1.6) % 2 == 0 then
+        drawText("PRESS SPACE TO START", W / 2, 370, 22, 1, 1, 1, 1, "center")
+    end
+
+    local lines = {
+        "ROTATE        LEFT RIGHT / A D",
+        "THRUST        UP / W",
+        "FIRE          SPACE",
+        "FULLSCREEN F11",
+    }
+    for i, text in ipairs(lines) do
+        drawText(text, W / 2, 450 + (i - 1) * 28, 13, 0.6, 0.75, 1, 0.75, "center")
+    end
+    drawText("HIGH SCORE " .. S.high, W / 2, H - 50, 16, 1, 0.85, 0.4, 0.9, "center")
+end
+
+local function drawGameOver()
+    drawText("GAME OVER", W / 2, H / 2 - 110, 60, 1, 0.25, 0.45, 1, "center")
+    drawText("SCORE " .. S.score, W / 2, H / 2 - 10, 26, 1, 0.95, 0.85, 1, "center")
+    if S.newHigh and math.floor(S.time * 3) % 2 == 0 then
+        drawText("NEW HIGH SCORE", W / 2, H / 2 + 40, 20, 1, 0.85, 0.3, 1, "center")
+    end
+    if S.modeTime > 1.5 then
+        drawText("SPACE TO PLAY AGAIN    ESC FOR TITLE", W / 2, H / 2 + 110, 16, 0.7, 0.8, 1, 0.9, "center")
+    end
+end
+
+-- ============================================================
+-- PUBLIC API
+-- ============================================================
+function Game.load()
+    S.time = 0
+    S.high = loadHighScore()
+    enterTitle()
+end
+
+function Game.update(dt)
+    S.time = S.time + dt
+    S.modeTime = S.modeTime + dt
+    if S.mode == "play" then
+        updatePlay(dt)
+    else
+        updateAttract(dt)
+    end
+
+    for i = #S.popups, 1, -1 do
+        local p = S.popups[i]
+        p.y = p.y - 30 * dt
+        p.life = p.life - dt
+        if p.life <= 0 then table.remove(S.popups, i) end
+    end
+    if S.banner then
+        S.banner.t = S.banner.t + dt
+        if S.banner.t > 2.2 then S.banner = nil end
+    end
+end
+
+function Game.draw()
+    lg.setColor(0.012, 0.008, 0.03)
+    lg.rectangle("fill", 0, 0, W, H)
+    lg.setLineStyle("smooth")
+    lg.setLineWidth(2)
+
+    for _, a in ipairs(S.asteroids) do
+        asteroidPoints(a)
+        drawWrapped(a.x, a.y, a.radius + 8, drawAsteroid, a)
+    end
+    for _, b in ipairs(S.bullets) do drawBullet(b) end
+    local s = S.ship
+    if s and s.alive and S.mode == "play" then
+        shipPoints(s)
+        drawWrapped(s.x, s.y, 32, drawShip, s)
+    end
+    drawPopups()
+
+    if S.mode == "title" then
+        drawTitle()
+    else
+        drawHud()
+        drawBanner()
+        if S.mode == "gameover" then drawGameOver() end
+    end
+    lg.setColor(1, 1, 1, 1)
+end
+
+function Game.keypressed(key, isrepeat)
+    if isrepeat then return end
+
+    if S.mode == "title" then
+        if key == "space" or key == "return" or key == "kpenter" then
+            startGame()
+        elseif key == "escape" then
+            love.event.quit()
+        end
+    elseif S.mode == "gameover" then
+        if S.modeTime > 1.5 and (key == "space" or key == "return" or key == "kpenter") then
+            startGame()
+        elseif key == "escape" then
+            enterTitle()
+        end
+    elseif key == "escape" then
+        enterTitle()
+    end
+end
+
+return Game

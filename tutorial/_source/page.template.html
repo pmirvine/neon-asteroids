@@ -1,0 +1,656 @@
+<title>Learn LÖVE by Building Neon Asteroids</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400&family=Chakra+Petch:wght@500;600;700&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+:root {
+  --bg: #f4f3f9;
+  --surface: #ffffff;
+  --ink: #1d1a31;
+  --muted: #5e5978;
+  --line: #e1deec;
+  --accent: #0a7f94;
+  --accent-2: #b8207a;
+  --warn: #a85a08;
+  --tip-bg: #e6f5f8;
+  --warn-bg: #fcf0e2;
+  --try-bg: #faeaf3;
+  --code-bg: #15122a;
+  --code-ink: #e9e6ff;
+  --code-muted: #8c86ab;
+  --code-line: #2b2647;
+  --shot-glow: 0 10px 40px -12px rgba(10, 127, 148, 0.35);
+  --toc-active: #e5f3f6;
+  --font-body: "Atkinson Hyperlegible", "Segoe UI", system-ui, sans-serif;
+  --font-display: "Chakra Petch", "Segoe UI", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "Cascadia Mono", Consolas, monospace;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0c0a17;
+    --surface: #141124;
+    --ink: #e9e6f6;
+    --muted: #a39dbf;
+    --line: #29243f;
+    --accent: #54e2f5;
+    --accent-2: #ff66bf;
+    --warn: #ffb15c;
+    --tip-bg: rgba(84, 226, 245, 0.07);
+    --warn-bg: rgba(255, 177, 92, 0.08);
+    --try-bg: rgba(255, 102, 191, 0.08);
+    --code-bg: #0f0c1f;
+    --code-ink: #ece9ff;
+    --code-muted: #8a84ab;
+    --code-line: #262041;
+    --shot-glow: 0 10px 50px -10px rgba(84, 226, 245, 0.28);
+    --toc-active: rgba(84, 226, 245, 0.09);
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0c0a17;
+  --surface: #141124;
+  --ink: #e9e6f6;
+  --muted: #a39dbf;
+  --line: #29243f;
+  --accent: #54e2f5;
+  --accent-2: #ff66bf;
+  --warn: #ffb15c;
+  --tip-bg: rgba(84, 226, 245, 0.07);
+  --warn-bg: rgba(255, 177, 92, 0.08);
+  --try-bg: rgba(255, 102, 191, 0.08);
+  --code-bg: #0f0c1f;
+  --code-ink: #ece9ff;
+  --code-muted: #8a84ab;
+  --code-line: #262041;
+  --shot-glow: 0 10px 50px -10px rgba(84, 226, 245, 0.28);
+  --toc-active: rgba(84, 226, 245, 0.09);
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+html { scroll-padding-top: 24px; }
+body {
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-size: 17px;
+  line-height: 1.65;
+  padding-inline: 20px;
+  -webkit-font-smoothing: antialiased;
+}
+a { color: var(--accent); text-underline-offset: 3px; }
+a:hover { color: var(--accent-2); }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
+
+.progress {
+  position: fixed; top: 0; left: 0; height: 3px; width: 0;
+  background: linear-gradient(90deg, var(--accent), var(--accent-2));
+  z-index: 10;
+  margin-top: env(safe-area-inset-top, 0px);
+}
+
+.layout {
+  display: grid;
+  grid-template-columns: 270px minmax(0, 1fr);
+  gap: 56px;
+  max-width: 1180px;
+  margin: 0 auto;
+  padding-block: 40px 96px;
+}
+
+/* ---------- table of contents ---------- */
+.toc {
+  position: sticky;
+  top: calc(env(safe-area-inset-top, 0px) + 24px);
+  align-self: start;
+  max-height: calc(100vh - 48px);
+  overflow-y: auto;
+  padding-right: 6px;
+  font-size: 14.5px;
+}
+.toc-title {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 15px;
+  letter-spacing: 0.02em;
+  margin: 0 0 14px;
+  color: var(--ink);
+}
+.toc-title span { color: var(--accent); }
+.toc ol { list-style: none; margin: 0; padding: 0; }
+.toc .toc-part {
+  font-family: var(--font-display);
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin: 18px 0 6px;
+}
+.toc a {
+  display: grid;
+  grid-template-columns: 26px 1fr;
+  gap: 4px;
+  padding: 5px 8px;
+  border-radius: 6px;
+  color: var(--ink);
+  text-decoration: none;
+  line-height: 1.35;
+}
+.toc a .n { color: var(--muted); font-variant-numeric: tabular-nums; font-family: var(--font-mono); font-size: 12.5px; padding-top: 1px; }
+.toc a:hover { background: var(--toc-active); color: var(--ink); }
+.toc a.active { background: var(--toc-active); color: var(--accent); }
+.toc a.active .n { color: var(--accent); }
+.toc-mobile { display: none; }
+
+/* ---------- article ---------- */
+#content { max-width: 760px; min-width: 0; }
+#content > * { max-width: 68ch; }
+#content > .code, #content > .table-wrap, #content > figure.shot, #content > .hero { max-width: none; }
+
+.eyebrow {
+  font-family: var(--font-display);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--accent);
+  margin: 0 0 10px;
+}
+h1, h2, h3 { font-family: var(--font-display); line-height: 1.15; text-wrap: balance; }
+h1 {
+  font-size: clamp(34px, 5.2vw, 52px);
+  font-weight: 700;
+  margin: 0 0 22px;
+  letter-spacing: -0.01em;
+}
+h2 {
+  font-size: 30px;
+  font-weight: 700;
+  margin: 72px 0 18px;
+  padding-top: 8px;
+  display: flex;
+  gap: 14px;
+  align-items: baseline;
+}
+h2 .num {
+  font-family: var(--font-mono);
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--accent-2);
+  min-width: 2ch;
+}
+h3 { font-size: 21px; font-weight: 600; margin: 40px 0 10px; }
+p, ul, ol { margin: 0 0 16px; }
+li { margin: 4px 0; }
+strong { font-weight: 700; }
+
+.part {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin: 88px 0 -40px;
+  font-family: var(--font-display);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.part::after { content: ""; flex: 1; height: 1px; background: linear-gradient(90deg, var(--accent), transparent); opacity: 0.6; }
+
+:not(pre) > code {
+  font-family: var(--font-mono);
+  font-size: 0.86em;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  padding: 1px 5px;
+  border-radius: 5px;
+  white-space: nowrap;
+}
+td :not(pre) > code, li :not(pre) > code { white-space: normal; }
+
+/* ---------- figures ---------- */
+figure.shot { margin: 28px 0 32px; }
+figure.shot img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  box-shadow: var(--shot-glow);
+  background: #000;
+}
+figure.shot figcaption { font-size: 14px; color: var(--muted); margin-top: 10px; }
+.hero figure.shot { margin-top: 8px; }
+.hero figure.shot img { border-radius: 14px; }
+
+/* ---------- code ---------- */
+.code {
+  margin: 22px 0 26px;
+  border-radius: 10px;
+  background: var(--code-bg);
+  border: 1px solid var(--code-line);
+  overflow: hidden;
+  position: relative;
+}
+.code-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 7px 10px 7px 16px;
+  border-bottom: 1px solid var(--code-line);
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  color: var(--code-ink);
+}
+.code-head .file { display: flex; align-items: center; gap: 10px; min-width: 0; flex-wrap: wrap; }
+.code-head .badge {
+  color: var(--code-muted);
+  border: 1px solid var(--code-line);
+  border-radius: 999px;
+  padding: 0 8px;
+  font-size: 11.5px;
+}
+.code-head .lang { color: var(--code-muted); text-transform: lowercase; }
+.copy {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--code-ink);
+  background: transparent;
+  border: 1px solid var(--code-line);
+  border-radius: 6px;
+  padding: 3px 10px;
+  cursor: pointer;
+}
+.copy:hover { border-color: #54e2f5; color: #54e2f5; }
+.code pre {
+  margin: 0;
+  padding: 14px 16px 16px;
+  overflow-x: auto;
+  font-family: var(--font-mono);
+  font-size: 13.5px;
+  line-height: 1.6;
+  color: var(--code-ink);
+  tab-size: 4;
+}
+.code.collapsed pre { max-height: 440px; overflow-y: hidden; }
+.code .more {
+  display: none;
+  position: absolute;
+  left: 0; right: 0; bottom: 0;
+  padding: 48px 0 14px;
+  text-align: center;
+  background: linear-gradient(180deg, transparent, var(--code-bg) 62%);
+}
+.code.collapsed .more { display: block; }
+.code .more button {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 14px;
+  letter-spacing: 0.04em;
+  color: #0c0a17;
+  background: #54e2f5;
+  border: 0;
+  border-radius: 999px;
+  padding: 7px 18px;
+  cursor: pointer;
+}
+
+/* highlight.js tokens, tuned for the dark code panel in both themes */
+.hljs-comment, .hljs-quote { color: #7d7799; font-style: italic; }
+.hljs-keyword, .hljs-selector-tag, .hljs-meta-keyword { color: #ff6ac1; }
+.hljs-string, .hljs-regexp { color: #ffd479; }
+.hljs-number, .hljs-literal { color: #c49bff; }
+.hljs-built_in, .hljs-type { color: #5ce1e6; }
+.hljs-title, .hljs-title.function_, .hljs-section { color: #7cf5a8; }
+.hljs-attr, .hljs-variable, .hljs-params { color: #e9e6ff; }
+.hljs-symbol, .hljs-bullet, .hljs-link { color: #5ce1e6; }
+
+/* ---------- callouts ---------- */
+blockquote {
+  margin: 22px 0;
+  padding: 14px 18px;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+}
+blockquote p:last-child { margin-bottom: 0; }
+blockquote.tip { background: var(--tip-bg); border-color: color-mix(in srgb, var(--accent) 35%, transparent); }
+blockquote.gotcha { background: var(--warn-bg); border-color: color-mix(in srgb, var(--warn) 40%, transparent); }
+blockquote.try { background: var(--try-bg); border-color: color-mix(in srgb, var(--accent-2) 35%, transparent); }
+blockquote .label {
+  display: inline-block;
+  font-family: var(--font-display);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  margin-right: 8px;
+}
+blockquote.tip .label { color: var(--accent); }
+blockquote.gotcha .label { color: var(--warn); }
+blockquote.try .label { color: var(--accent-2); }
+
+/* ---------- tables ---------- */
+.table-wrap { overflow-x: auto; margin: 20px 0 26px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); }
+table { border-collapse: collapse; width: 100%; font-size: 15px; }
+th, td { text-align: left; padding: 9px 14px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { font-family: var(--font-display); font-weight: 600; font-size: 13px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
+tr:last-child td { border-bottom: 0; }
+
+hr { border: 0; border-top: 1px solid var(--line); margin: 48px 0; }
+
+footer.credits {
+  margin-top: 80px;
+  padding-top: 22px;
+  border-top: 1px solid var(--line);
+  font-size: 14px;
+  color: var(--muted);
+}
+
+.fallback { white-space: pre-wrap; font-family: var(--font-mono); font-size: 13px; }
+
+/* ---------- narrow screens ---------- */
+@media (max-width: 960px) {
+  .layout { grid-template-columns: minmax(0, 1fr); gap: 0; padding-block: 24px 72px; }
+  .toc { display: none; }
+  .toc-mobile { display: block; margin: 0 0 28px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); }
+  .toc-mobile summary { cursor: pointer; padding: 12px 16px; font-family: var(--font-display); font-weight: 600; }
+  .toc-mobile .toc-inner { padding: 0 10px 12px; max-height: 60vh; overflow-y: auto; font-size: 15px; }
+  #content > * { max-width: none; }
+  h2 { font-size: 25px; margin-top: 56px; }
+  .part { margin: 64px 0 -30px; }
+  body { font-size: 16.5px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+}
+</style>
+
+<div class="progress" id="progress" aria-hidden="true"></div>
+<div class="layout">
+  <nav class="toc" id="toc" aria-label="Chapters"></nav>
+  <main id="content">
+    <noscript><p>This tutorial needs JavaScript to render. The same text is in <code>tutorial/README.md</code> in the project.</p></noscript>
+  </main>
+</div>
+
+<script type="text/markdown" id="md">%%MARKDOWN%%</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/marked/4.3.0/marked.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/powershell.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/glsl.min.js"></script>
+<script>
+(function () {
+  var content = document.getElementById("content");
+  var source = document.getElementById("md").textContent;
+
+  function render() {
+    marked.setOptions({
+      gfm: true,
+      headerIds: true,
+      mangle: false,
+      langPrefix: "hljs language-",
+      highlight: function (code, lang) {
+        if (window.hljs && lang && hljs.getLanguage(lang)) {
+          return hljs.highlight(code, { language: lang }).value;
+        }
+        return undefined;
+      }
+    });
+    content.innerHTML = marked.parse(source);
+  }
+
+  try {
+    render();
+  } catch (err) {
+    var pre = document.createElement("pre");
+    pre.className = "fallback";
+    pre.textContent = source;
+    content.textContent = "";
+    content.appendChild(pre);
+    return;
+  }
+
+  // ---- hero: eyebrow above the title, title + first screenshot grouped ----
+  var h1 = content.querySelector("h1");
+  if (h1) {
+    var hero = document.createElement("div");
+    hero.className = "hero";
+    var eyebrow = document.createElement("p");
+    eyebrow.className = "eyebrow";
+    eyebrow.textContent = "A hands-on tutorial · LÖVE 11.5 · 21 chapters";
+    content.insertBefore(hero, h1);
+    hero.appendChild(eyebrow);
+    hero.appendChild(h1);
+  }
+
+  // ---- screenshots become captioned figures ----
+  content.querySelectorAll("p > img").forEach(function (img) {
+    var p = img.parentElement;
+    if (p.childNodes.length !== 1) return;
+    var fig = document.createElement("figure");
+    fig.className = "shot";
+    img.loading = "lazy";
+    fig.appendChild(img);
+    if (img.alt) {
+      var cap = document.createElement("figcaption");
+      cap.textContent = img.alt;
+      fig.appendChild(cap);
+    }
+    p.replaceWith(fig);
+  });
+  var firstFig = content.querySelector("figure.shot");
+  var heroEl = content.querySelector(".hero");
+  if (firstFig && heroEl && heroEl.nextElementSibling === firstFig) {
+    firstFig.querySelector("img").loading = "eager";
+    heroEl.appendChild(firstFig);
+  }
+
+  // ---- chapter headings: pull the number out ----
+  content.querySelectorAll("h2").forEach(function (h) {
+    var m = h.textContent.match(/^(\d+)\.\s+(.*)$/);
+    if (m) {
+      h.dataset.num = m[1];
+      h.innerHTML = '<span class="num">' + m[1].padStart(2, "0") + '</span><span class="t"></span>';
+      h.querySelector(".t").textContent = m[2];
+    }
+  });
+
+  // ---- callouts ----
+  var kinds = { "Tip:": "tip", "Gotcha:": "gotcha", "Try it:": "try", "Gotcha: the canvas that wouldn't let go.": "gotcha", "Gotcha: the white disc.": "gotcha" };
+  content.querySelectorAll("blockquote").forEach(function (bq) {
+    var strong = bq.querySelector("p > strong:first-child");
+    if (!strong) return;
+    var key = strong.textContent.trim();
+    var kind = kinds[key] || (key.indexOf("Gotcha") === 0 ? "gotcha" : null);
+    if (!kind) return;
+    bq.classList.add(kind);
+    var label = document.createElement("span");
+    label.className = "label";
+    var rest = key.replace(/^(Tip|Gotcha|Try it):?\s*/, "");
+    label.textContent = kind === "try" ? "Try it" : kind === "tip" ? "Tip" : "Gotcha";
+    if (rest) {
+      strong.textContent = rest;
+      strong.parentNode.insertBefore(label, strong);
+    } else {
+      strong.replaceWith(label);
+    }
+  });
+
+  // ---- tables scroll sideways on small screens ----
+  content.querySelectorAll("table").forEach(function (t) {
+    var wrap = document.createElement("div");
+    wrap.className = "table-wrap";
+    t.parentNode.insertBefore(wrap, t);
+    wrap.appendChild(t);
+  });
+
+  // ---- code blocks: header with file name, copy button, collapse long listings ----
+  content.querySelectorAll("pre").forEach(function (pre) {
+    var code = pre.querySelector("code");
+    var box = document.createElement("div");
+    box.className = "code";
+    var head = document.createElement("div");
+    head.className = "code-head";
+    var file = document.createElement("div");
+    file.className = "file";
+    var prev = pre.previousElementSibling;
+    if (prev && prev.classList.contains("codefile")) {
+      var badge = prev.querySelector("span");
+      var name = document.createElement("span");
+      name.textContent = prev.firstChild.textContent.trim();
+      file.appendChild(name);
+      if (badge) {
+        var b = document.createElement("span");
+        b.className = "badge";
+        b.textContent = badge.textContent;
+        file.appendChild(b);
+      }
+      prev.remove();
+    } else {
+      var lang = code && (code.className.match(/language-(\w+)/) || [])[1];
+      var l = document.createElement("span");
+      l.className = "lang";
+      l.textContent = lang || "text";
+      file.appendChild(l);
+    }
+    var btn = document.createElement("button");
+    btn.className = "copy";
+    btn.type = "button";
+    btn.textContent = "Copy";
+    btn.addEventListener("click", function () {
+      var text = code ? code.textContent : pre.textContent;
+      function done(ok) {
+        btn.textContent = ok ? "Copied" : "Select + Ctrl+C";
+        setTimeout(function () { btn.textContent = "Copy"; }, 1600);
+      }
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(function () { done(true); }, function () { selectCode(); done(false); });
+      } else { selectCode(); done(false); }
+      function selectCode() {
+        var range = document.createRange();
+        range.selectNodeContents(code || pre);
+        var sel = window.getSelection();
+        sel.removeAllRanges();
+        sel.addRange(range);
+      }
+    });
+    head.appendChild(file);
+    head.appendChild(btn);
+    pre.parentNode.insertBefore(box, pre);
+    box.appendChild(head);
+    box.appendChild(pre);
+
+    var lines = (code ? code.textContent : pre.textContent).split("\n").length;
+    if (lines > 32) {
+      box.classList.add("collapsed");
+      var more = document.createElement("div");
+      more.className = "more";
+      var mb = document.createElement("button");
+      mb.type = "button";
+      mb.textContent = "Show all " + lines + " lines";
+      mb.addEventListener("click", function () { box.classList.remove("collapsed"); });
+      more.appendChild(mb);
+      box.appendChild(more);
+    }
+  });
+
+  // ---- external links open in a new tab ----
+  content.querySelectorAll('a[href^="http"]').forEach(function (a) {
+    a.target = "_blank";
+    a.rel = "noopener";
+  });
+
+  // ---- table of contents ----
+  function buildToc(container) {
+    var title = document.createElement("p");
+    title.className = "toc-title";
+    title.innerHTML = "Learn LÖVE <span>·</span> Neon Asteroids";
+    container.appendChild(title);
+    var list = null;
+    content.querySelectorAll(".part, h2").forEach(function (el) {
+      if (el.classList.contains("part")) {
+        var p = document.createElement("div");
+        p.className = "toc-part";
+        p.textContent = el.textContent.replace(/^Part\s+\d+\s*·\s*/, "");
+        container.appendChild(p);
+        list = null;
+        return;
+      }
+      if (!list) { list = document.createElement("ol"); container.appendChild(list); }
+      var li = document.createElement("li");
+      var a = document.createElement("a");
+      a.href = "#" + el.id;
+      var n = document.createElement("span");
+      n.className = "n";
+      n.textContent = el.dataset.num ? el.dataset.num.padStart(2, "0") : (el.textContent.match(/Appendix ([A-Z])/) || [0, "·"])[1];
+      var t = document.createElement("span");
+      t.textContent = el.dataset.num ? el.querySelector(".t").textContent : el.textContent.replace(/^Appendix [A-Z]:\s*/, "");
+      a.appendChild(n);
+      a.appendChild(t);
+      a.dataset.target = el.id;
+      li.appendChild(a);
+      list.appendChild(li);
+    });
+  }
+  var toc = document.getElementById("toc");
+  buildToc(toc);
+  var mobile = document.createElement("details");
+  mobile.className = "toc-mobile";
+  var summary = document.createElement("summary");
+  summary.textContent = "Chapters";
+  var inner = document.createElement("div");
+  inner.className = "toc-inner toc";
+  inner.style.display = "block";
+  inner.style.position = "static";
+  buildToc(inner);
+  inner.querySelector(".toc-title").remove();
+  mobile.appendChild(summary);
+  mobile.appendChild(inner);
+  var heroBlock = content.querySelector(".hero");
+  content.insertBefore(mobile, heroBlock ? heroBlock.nextSibling : content.firstChild);
+  inner.addEventListener("click", function (e) { if (e.target.closest("a")) mobile.open = false; });
+
+  // ---- credits ----
+  var foot = document.createElement("footer");
+  foot.className = "credits";
+  foot.innerHTML = 'Every code listing on this page is copied from the tested checkpoint projects in <code>tutorial/</code>. ' +
+    'The starfield library comes from <a href="https://github.com/pmirvine/retro-starfield-starter-kit" target="_blank" rel="noopener">retro-starfield-starter-kit</a> (MIT). ' +
+    'LÖVE is free software from <a href="https://love2d.org" target="_blank" rel="noopener">love2d.org</a>.';
+  content.appendChild(foot);
+
+  // ---- reading progress + active chapter ----
+  var bar = document.getElementById("progress");
+  var heads = Array.prototype.slice.call(content.querySelectorAll("h2"));
+  var links = Array.prototype.slice.call(toc.querySelectorAll("a"));
+  function onScroll() {
+    var doc = document.documentElement;
+    var max = doc.scrollHeight - window.innerHeight;
+    bar.style.width = (max > 0 ? (window.scrollY / max) * 100 : 0) + "%";
+    var current = null;
+    for (var i = 0; i < heads.length; i++) {
+      if (heads[i].getBoundingClientRect().top < 140) current = heads[i].id; else break;
+    }
+    links.forEach(function (a) {
+      var on = a.dataset.target === current;
+      a.classList.toggle("active", on);
+      if (on && a.scrollIntoView && toc.matches(":hover") === false) {
+        var r = a.getBoundingClientRect(), tr = toc.getBoundingClientRect();
+        if (r.top < tr.top || r.bottom > tr.bottom) a.scrollIntoView({ block: "nearest" });
+      }
+    });
+  }
+  window.addEventListener("scroll", onScroll, { passive: true });
+  onScroll();
+
+  if (location.hash) {
+    var target = document.getElementById(decodeURIComponent(location.hash.slice(1)));
+    if (target) target.scrollIntoView();
+  }
+})();
+</script>

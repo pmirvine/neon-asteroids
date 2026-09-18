@@ -1,0 +1,3941 @@
+# Learn LÖVE by Building Neon Asteroids
+
+![The finished game: glowing vector asteroids, a twinkling starfield and a smart-bomb shockwave](images/ch18.png)
+
+This tutorial takes you from *"I've never used Lua"* to a finished, polished arcade game. It has glowing neon graphics, particle explosions, screen shake, a twinkling starfield and sound effects that are generated entirely in code.
+
+You'll build it one step at a time. Every chapter adds something you can run and see, and every chapter ends with a working **checkpoint** you can compare against your own code.
+
+**You'll need:**
+
+- A Windows, macOS or Linux computer you're comfortable using.
+- Visual Studio Code (VS Code).
+- A little coding experience in *any* language. If you know what a variable, an `if` and a loop are, you're ready. No Lua or LÖVE experience needed.
+
+**By the end you'll know how to:**
+
+- write Lua, the small, fast language LÖVE games are written in
+- use the game loop, input, drawing, timing and randomness
+- move things with velocity, rotation and a little friendly trigonometry
+- detect collisions and organise a growing game into files and screens
+- make a game *feel* good: additive glow, particles, screen shake and slow motion
+- write GPU shaders for a bloom effect
+- synthesize retro sound effects from raw numbers
+- debug, test and share your game
+
+<div class="part">Part 1 · Getting started</div>
+
+## 1. Welcome
+
+### What is LÖVE?
+
+[LÖVE](https://love2d.org) (often written *Love2D*) is a free, open-source framework for making 2D games. You write your game in **Lua**, and LÖVE provides everything around it:
+
+- a window to draw in, plus fast graphics
+- keyboard, mouse and gamepad input
+- sound, files, maths helpers and timing
+
+It doesn't give you an editor with drag-and-drop scenes like Unity or Godot. You write code, run it, and see the result. That makes it one of the best ways to understand how games actually work, because nothing is hidden. It's also used for real commercial games: the hit card game *Balatro* was made with LÖVE.
+
+This tutorial uses **LÖVE 11.5**.
+
+### What you'll build
+
+*Neon Asteroids* is a modern take on the 1979 arcade classic:
+
+- a ship that rotates, thrusts and drifts with momentum, on a screen that wraps at every edge
+- asteroids that split into smaller pieces when shot
+- flying saucers that shoot back, hyperspace jumps, and a *Defender*-style smart bomb
+- glowing neon lines, particle explosions, and screen shake for the really big explosions
+- a twinkling arcade starfield
+- chunky retro sound effects, all synthesized in code, with no audio files
+
+There are **no image or sound files** anywhere in the game. Everything you see and hear is made by code you'll write.
+
+### How to use this tutorial
+
+Work through the chapters in order. Each one explains *why* before *how*, then shows the code.
+
+The project you downloaded contains a `tutorial/` folder. For every chapter that has code, there is a matching checkpoint folder: `tutorial/06-ship`, `tutorial/09-collisions`, and so on. Each one is a complete, runnable snapshot of the game at the end of that chapter. If you get stuck, or your version behaves differently, run the checkpoint and compare. (Chapter 18's checkpoint is the finished game itself, at the top of the project.)
+
+You'll see a few kinds of boxes along the way:
+
+> **Tip:** handy extra information.
+
+> **Gotcha:** a mistake almost everyone makes, and how to avoid it.
+
+> **Try it:** a small experiment. Doing these is the fastest way to learn.
+
+Early chapters show *all* of the code. From Chapter 10 onwards the game gets big (over 900 lines by the end), so chapters show the new and changed parts and point you to the checkpoint for the full listing.
+
+## 2. Install LÖVE and set up VS Code
+
+### Install LÖVE
+
+Go to [love2d.org](https://love2d.org) and download LÖVE 11.5 for your system.
+
+**Windows**
+
+1. Run the 64-bit installer and accept the defaults. LÖVE installs to `C:\Program Files\LOVE`.
+2. Add LÖVE to your `PATH` so you can run it from any terminal:
+   - Press the Windows key and type **environment**. Choose **Edit the system environment variables**, then **Environment Variables…**.
+   - Under *User variables*, select **Path**, click **Edit…**, then **New**, and paste `C:\Program Files\LOVE`.
+   - Click OK on every window.
+3. Open a **new** terminal (PowerShell) and check it works:
+
+```powershell
+love --version
+```
+
+You should see something like `LOVE 11.5 (Mysterious Mysteries)`.
+
+> **Tip:** Windows has two LÖVE programs. `love.exe` runs your game quietly. `lovec.exe` (the **c** is for *console*) also shows a console window where anything your code `print`s appears. Use `lovec` while developing. You'll see why in Chapter 4.
+
+**macOS**
+
+1. Download the macOS zip, unzip it, and drag `love.app` into **Applications**.
+2. The first time, right-click `love.app` and choose **Open** (macOS asks you to confirm apps from the internet).
+3. So you can type `love` in the Terminal, add this line to the file `~/.zshrc`, then open a new Terminal window:
+
+```bash
+alias love="/Applications/love.app/Contents/MacOS/love"
+```
+
+**Linux**
+
+Use the AppImage from the website, or your package manager (for example `sudo apt install love`). Check you have version 11.x with `love --version`.
+
+### Set up VS Code
+
+1. Install [VS Code](https://code.visualstudio.com) if you haven't already.
+2. Make a folder for your game, for example `my-asteroids`, and open it in VS Code with **File → Open Folder…**.
+3. Open the Extensions view (`Ctrl+Shift+X`, or `Cmd+Shift+X` on macOS). Search for **Lua** and install the one by **sumneko** (it's called *Lua*, published by *sumneko*). It gives you colouring, autocomplete and error squiggles.
+4. Teach it about LÖVE. Open the Command Palette (`Ctrl+Shift+P`), run **Lua: Open Addon Manager**, search for **LÖVE**, and click **Enable**. Now VS Code knows every `love.*` function and shows its documentation as you type.
+
+If the Addon Manager isn't available in your version, create a file called `.vscode/settings.json` in your project with this content instead. It stops VS Code from underlining `love` as an unknown variable:
+
+```json
+{
+    "Lua.runtime.version": "LuaJIT",
+    "Lua.diagnostics.globals": ["love"]
+}
+```
+
+### Run your game with one key
+
+Typing `love .` in the terminal works (the `.` means "the game in this folder"), but it's nicer to press a key. Create a file called `.vscode/tasks.json`:
+
+```json
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "Run LÖVE",
+            "type": "shell",
+            "command": "lovec .",
+            "group": { "kind": "build", "isDefault": true },
+            "problemMatcher": []
+        }
+    ]
+}
+```
+
+Now **`Ctrl+Shift+B`** (`Cmd+Shift+B` on macOS) runs your game. On macOS and Linux, change `lovec .` to `love .`.
+
+> **Tip:** The checkpoints can run from the project root too. In a terminal opened in the downloaded project, `love tutorial/06-ship` runs the Chapter 6 checkpoint.
+
+## 3. Hello, LÖVE
+
+Create a file called `main.lua` in your project folder and type this in:
+
+<div class="codefile">main.lua <span>03-hello</span></div>
+
+```lua
+-- Chapter 3: the smallest LÖVE game.
+-- LÖVE calls love.draw about 60 times a second; whatever it draws is shown.
+
+function love.draw()
+    love.graphics.print("Hello, LÖVE!", 350, 290)
+end
+```
+
+Press `Ctrl+Shift+B` (or type `love .` in the terminal). A window opens with your message in it. Close it with the window's close button.
+
+![Hello, LÖVE](images/ch03.png)
+
+### What just happened?
+
+When LÖVE starts, it looks for a file called **`main.lua`** in the folder you gave it and runs it. Your file *defines a function* called `love.draw`, but it never calls it. **LÖVE calls it for you**, about 60 times every second, and shows whatever it draws.
+
+Functions that LÖVE calls for you are called **callbacks**. You'll meet the important ones soon:
+
+| Callback | When LÖVE calls it |
+|---|---|
+| `love.load()` | once, when the game starts |
+| `love.update(dt)` | every frame, before drawing. Move things here. |
+| `love.draw()` | every frame. Draw things here. |
+| `love.keypressed(key)` | whenever a key is pressed |
+
+You never have to define all of them. LÖVE only calls the ones that exist.
+
+### Coordinates
+
+`love.graphics.print("Hello, LÖVE!", 350, 290)` draws text with its top-left corner at **x = 350, y = 290**. The origin **(0, 0) is the top-left corner** of the window. **x grows to the right and y grows downwards**, which is the opposite of the graphs you drew at school. The default window is 800 × 600 pixels.
+
+```
+(0,0) ────────── x ─────────▶ (800,0)
+  │
+  │        (350,290) Hello, LÖVE!
+  y
+  │
+  ▼
+(0,600)
+```
+
+### Colour
+
+Add a line *before* the print:
+
+```lua
+function love.draw()
+    love.graphics.setColor(1, 0.4, 0.85)
+    love.graphics.print("Hello, LÖVE!", 350, 290)
+end
+```
+
+`setColor(red, green, blue)` takes numbers from **0 to 1**, so `(1, 0.4, 0.85)` is a hot pink. There's an optional fourth number, **alpha**, for transparency (1 = solid, 0 = invisible). The colour stays set for everything drawn afterwards until you change it.
+
+> **Gotcha:** Older LÖVE tutorials (before version 11) use colours from 0 to 255. If you copy `setColor(255, 0, 0)` from an old tutorial, LÖVE 11 treats every value above 1 as 1, and you'll get white.
+
+### Your first error
+
+Delete the closing `)` from the `print` line and run the game. Instead of your window, LÖVE shows a blue **error screen** with something like:
+
+```
+Error
+Syntax error: main.lua:6: ')' expected (to close '(' at line 5) near 'end'
+```
+
+The error screen is your friend. It tells you the **file** (`main.lua`), the **line** where Lua gave up (`6`), and what went wrong: it was still waiting for the `)` that closes the `(` opened on line 5. Put the bracket back, and remember this screen. You'll see it again, and Chapter 19 is all about reading it.
+
+> **Try it:** Draw a second line of text somewhere else, in a different colour. Then add `love.graphics.rectangle("line", 100, 100, 200, 50)` and work out where the rectangle will appear *before* you run it.
+
+## 4. Lua in a hurry
+
+Lua is a small language, and you can learn most of it in an afternoon. This chapter covers everything the game uses. The checkpoint `tutorial/04-lua-playground` contains every example below in one runnable file. Run it, change things, and run it again.
+
+![The Lua playground running](images/ch04.png)
+
+### Comments and printing
+
+```lua
+-- Two dashes start a comment. Lua ignores the rest of the line.
+--[[ This is a comment
+     spanning several lines. ]]
+
+print("Hello")   -- prints to the console, not the game window
+```
+
+`print` writes to the console. On Windows you only see it if you ran the game with **`lovec`**. On macOS and Linux it appears in the terminal you launched from.
+
+### Variables and `local`
+
+```lua
+local playerName = "Ada"
+local lives = 3
+local speed = 2.5
+local alive = true
+```
+
+A variable is a name for a value. Always put **`local`** in front the first time you create one. Without it, Lua creates a **global** variable that every file in your game can see and accidentally change. With `local`, the variable belongs to the file or function it was created in.
+
+Lua has only a few kinds of value: **numbers** (`3`, `2.5`, `-1`), **strings** (text, in `"double"` or `'single'` quotes), **booleans** (`true`/`false`), **`nil`** (meaning "nothing"), **tables** and **functions**. There's no separate integer type: `3` and `3.0` are the same number.
+
+### Maths
+
+```lua
+lives = lives - 1           -- no  lives -= 1  or  lives++  in Lua!
+local half = 7 / 2          -- 3.5   (division always gives a decimal)
+local rest = 7 % 2          -- 1     (remainder)
+local big = 2 ^ 10          -- 1024  (power)
+local root = math.sqrt(16)  -- 4
+local down = math.floor(3.7) -- 3
+```
+
+The `math` library has everything else: `math.sin`, `math.cos`, `math.pi`, `math.min`, `math.max`, `math.abs` and more.
+
+> **Gotcha:** `+=`, `-=`, `++` and `--` (as maths) don't exist in Lua. `--` starts a comment! Writing `x += 1` is a syntax error, and the whole file refuses to load.
+
+### Strings
+
+```lua
+local name = "Ada"
+local greeting = "Hello, " .. name .. "!"   -- .. joins strings
+local line = "Lives: " .. 3                 -- numbers join fine
+local shout = string.upper("hi")            -- "HI"
+local n = tonumber("42")                    -- the number 42
+local s = tostring(true)                    -- the string "true"
+```
+
+`..` (two dots) glues strings together. Joining a number works, but joining `nil` or a boolean is an error, so wrap those in `tostring(...)`.
+
+### Comparisons and logic
+
+```lua
+if lives > 2 then
+    print("Plenty of lives left")
+elseif lives > 0 then
+    print("Careful now")
+else
+    print("Game over")
+end
+```
+
+Comparisons are `==`, `<`, `>`, `<=`, `>=`, and **`~=`** for "not equal" (not `!=`). Combine them with the words `and`, `or` and `not`. Every `if` ends with `end`, and so do loops and functions.
+
+> **Gotcha:** In Lua, **only `false` and `nil` count as false**. The number `0` and the empty string `""` both count as *true*, unlike in JavaScript or Python.
+
+Two handy idioms use `and`/`or`:
+
+```lua
+local size = userSize or 14             -- "userSize, or 14 if it's nil"
+local label = alive and "yes" or "no"   -- a tiny if/else in one line
+```
+
+### Tables: Lua's only data structure
+
+Lua has one way to group data: the **table**. It does the jobs of arrays, lists, dictionaries and objects in other languages.
+
+**As a list:**
+
+```lua
+local colors = { "red", "green", "blue" }
+print(colors[1])            -- "red"   ← lists start at 1, not 0!
+print(#colors)              -- 3       ← # gives the length
+table.insert(colors, "magenta")   -- add to the end
+table.remove(colors, 2)           -- remove "green"; later items shift down
+
+for i, color in ipairs(colors) do
+    print(i, color)          -- 1 red, 2 blue, 3 magenta
+end
+```
+
+> **Gotcha:** Lists start at index **1**. `colors[0]` is `nil`, not the first item. If you know other languages this will trip you up at least once. It's normal.
+
+**As a record** (named fields):
+
+```lua
+local ship = { x = 400, y = 300, name = "Viper" }
+ship.x = ship.x + 10         -- dot to read or write a field
+ship.shield = 100            -- add a new field any time
+print(ship.name)             -- "Viper"
+print(ship.missing)          -- nil: reading a missing field isn't an error
+```
+
+`ship.x` is shorthand for `ship["x"]`. The bracket form is useful when the key is in a variable or isn't a word, as in `ASTEROID[3]`. The game uses records for every ship, asteroid, bullet and particle.
+
+To loop over *all* fields of a record, use `pairs` instead of `ipairs`. The order isn't guaranteed.
+
+```lua
+for key, value in pairs(ship) do print(key, value) end
+```
+
+### Loops
+
+```lua
+for n = 1, 10 do print(n) end          -- 1, 2, … 10 (both ends included)
+for n = 10, 1, -1 do print(n) end      -- counting down, step -1
+for i = 1, #list, 2 do print(list[i]) end   -- every second item
+
+while lives > 0 do lives = lives - 1 end
+```
+
+`break` leaves a loop early.
+
+### Functions
+
+```lua
+local function add(a, b)
+    return a + b
+end
+
+local function minMax(a, b)          -- functions can return several values
+    if a < b then return a, b end
+    return b, a
+end
+
+local lo, hi = minMax(9, 4)          -- lo = 4, hi = 9
+```
+
+Functions are values, just like numbers. You can store them in variables and tables, and pass them to other functions. The game does this in Chapter 8.
+
+> **Gotcha:** A `local function` only exists from the line where it's written *downwards*. If function A calls function B, **B must be written above A** in the file. Otherwise Lua looks for a *global* B, finds nothing, and you get `attempt to call a nil value`. This exact bug broke the first version of this very game (see Chapter 19).
+
+### `nil`: the value of nothing
+
+Any variable or field that was never set is `nil`. Using `nil` where a value is expected is the most common runtime error you'll see:
+
+```
+attempt to perform arithmetic on a nil value (field 'speed')
+attempt to index a nil value (local 'ship')
+```
+
+The first means you did maths with something that doesn't exist, usually a typo in a field name. The second means you wrote `ship.x` while `ship` itself is `nil`.
+
+### Modules: splitting code across files
+
+A Lua file can `return` a value, usually a table of functions. Another file loads it with `require`:
+
+```lua
+-- src/greet.lua
+local Greet = {}
+
+function Greet.hello(name)
+    return "Hello, " .. name
+end
+
+return Greet
+```
+
+```lua
+-- main.lua
+local Greet = require "src.greet"   -- loads src/greet.lua (dots become folders)
+print(Greet.hello("Ada"))
+```
+
+`require` runs each file only once and remembers what it returned, so every file that requires `src.greet` gets the same table.
+
+### The colon `:`
+
+You'll see calls like `field:update(dt)`. The colon is shorthand: **`field:update(dt)` means `field.update(field, dt)`**. It passes the table itself as the first argument, which is how Lua does objects. You'll only *use* colons in this tutorial (for LÖVE objects like canvases, sounds and the starfield), not write classes with them.
+
+### If you already know Python or JavaScript
+
+| Idea | Lua | Python | JavaScript |
+|---|---|---|---|
+| local variable | `local x = 1` | `x = 1` | `let x = 1` |
+| not equal | `a ~= b` | `a != b` | `a !== b` |
+| logic | `and or not` | `and or not` | `&& \|\| !` |
+| join strings | `a .. b` | `a + b` | `a + b` |
+| length | `#list` | `len(list)` | `list.length` |
+| first item | `list[1]` | `list[0]` | `list[0]` |
+| nothing | `nil` | `None` | `null`/`undefined` |
+| block end | `end` | indentation | `}` |
+| add one | `x = x + 1` | `x += 1` | `x++` |
+
+> **Try it:** In the playground, add a function `clamp(value, lo, hi)` that returns `value` limited to the range `lo`–`hi`, and `say` a few results. (The game uses the same idea to cap the ship's speed.)
+
+<div class="part">Part 2 · Building the game</div>
+
+## 5. The game loop
+
+Every game, from Pong to Elden Ring, runs the same basic cycle many times a second:
+
+```
+        ┌──────────────┐
+        │  love.load   │   once, at the start
+        └──────┬───────┘
+               ▼
+   ┌──▶ ┌──────────────┐
+   │    │ love.update  │   change the world: move things, check input
+   │    └──────┬───────┘
+   │           ▼
+   │    ┌──────────────┐
+   │    │  love.draw   │   show the world as it is right now
+   │    └──────┬───────┘
+   └───────────┘          …repeat ~60 times a second (each pass is a "frame")
+```
+
+The key rule: **`update` changes things, `draw` only shows them.** Never move anything inside `draw`.
+
+### dt: time since the last frame
+
+`love.update` receives one argument, **`dt`** ("delta time"): the number of seconds since the previous frame. At 60 frames per second it's about `0.0167`.
+
+Why does this matter? Suppose you move a circle 2 pixels every frame. On a 60 Hz screen that's 120 pixels per second, but on a 144 Hz gaming monitor it's 288. The game would run more than twice as fast on a better screen!
+
+The fix is to think in **pixels per second** and multiply by `dt`:
+
+```lua
+x = x + 120 * dt     -- 120 pixels per second, on any computer
+```
+
+At 60 fps, `120 * 0.0167 ≈ 2` pixels per frame. At 144 fps it's about `0.83` pixels per frame, but 144 of them still add up to 120 pixels per second.
+
+### Velocity
+
+A speed with a direction is called a **velocity**. In 2D it's two numbers: how fast you move along x (`vx`) and along y (`vy`). Every moving thing in this game has a position `(x, y)` and a velocity `(vx, vy)`, and each frame does:
+
+```lua
+x = x + vx * dt
+y = y + vy * dt
+```
+
+Replace your `main.lua` with this:
+
+<div class="codefile">main.lua <span>05-game-loop</span></div>
+
+```lua
+-- Chapter 5: the game loop.
+-- A circle drifts across the screen at a steady speed and wraps at the edges.
+
+local W, H = 800, 600
+
+local x, y = 400, 300
+local vx, vy = 120, 60 -- velocity: pixels per second
+
+function love.load()
+    love.window.setTitle("The game loop")
+end
+
+function love.update(dt)
+    -- dt is the time since the last frame, in seconds (about 0.0167 at 60 fps).
+    -- Multiplying by dt makes movement the same speed on every computer.
+    x = x + vx * dt
+    y = y + vy * dt
+
+    -- wrap around: leave on the right, come back on the left
+    if x > W then x = x - W end
+    if y > H then y = y - H end
+end
+
+function love.draw()
+    love.graphics.setColor(0.25, 0.95, 1)
+    love.graphics.circle("line", x, y, 30)
+
+    love.graphics.setColor(1, 1, 1)
+    love.graphics.print("x = " .. math.floor(x) .. "   y = " .. math.floor(y), 10, 10)
+    love.graphics.print("FPS: " .. love.timer.getFPS(), 10, 30)
+end
+
+function love.keypressed(key)
+    if key == "escape" then
+        love.event.quit()
+    end
+end
+```
+
+![A circle drifting across the screen](images/ch05.png)
+
+A few new things:
+
+- `love.load` runs once at startup, which makes it the place for setup like setting the window title.
+- `love.timer.getFPS()` returns the current frames per second.
+- `love.keypressed(key)` is called with the key's name (`"escape"`, `"space"`, `"a"`, `"left"`…) when a key goes down. `love.event.quit()` closes the game.
+- The two `if` lines **wrap** the circle: leaving the right edge brings it back on the left.
+
+> **Try it:** Make the circle **bounce** instead of wrapping. When `x > W` or `x < 0`, flip the velocity with `vx = -vx`, and do the same for `y`. Then try giving it gravity: add `vy = vy + 300 * dt` at the start of `update`.
+
+## 6. A ship you can fly
+
+Now for the star of the show. An Asteroids ship doesn't move like a car. It **rotates**, and when you **thrust**, it accelerates in the direction it's facing. Let go and it keeps drifting. That floaty momentum is the whole feel of the game.
+
+### Drawing the ship as points
+
+The classic ship is four points joined into an arrowhead. We describe it **around its own centre, pointing right** (along +x):
+
+```lua
+local SHIP_SHAPE = { 20, 0, -13, -12, -7, 0, -13, 12 }
+--                  nose   left wing  notch  right wing
+```
+
+Reading the pairs in order: the **nose** at (20, 0), the **left wing tip** at (−13, −12), a **notch** at (−7, 0) that gives the classic arrowhead cut, and the **right wing tip** at (−13, 12). `polygon` joins them in order and closes the shape back to the nose. Because y points down, "left wing" means the wing that's up the screen when the ship points right.
+
+It's a **flat list** `{x1, y1, x2, y2, ...}` because that's exactly what `love.graphics.polygon("line", points)` wants.
+
+### Angles, radians and a little trigonometry
+
+Angles in maths libraries are measured in **radians**, not degrees. A full turn is `2π` radians (about 6.283), so:
+
+| Degrees | Radians | Direction (remember y points down!) |
+|---|---|---|
+| 0° | 0 | → right |
+| 90° | π/2 ≈ 1.571 | ↓ down |
+| 180° | π ≈ 3.142 | ← left |
+| 270° | 3π/2 ≈ 4.712, or −π/2 | ↑ up |
+
+To start pointing up, the ship begins at `angle = -math.pi / 2`.
+
+The two functions that turn an angle into a direction are **cosine** and **sine**. For any angle, **`math.cos(angle)`** is how far you move along x and **`math.sin(angle)`** how far along y, if you take one step of length 1 in that direction. So to push the ship forward at `THRUST` pixels per second per second:
+
+```lua
+ship.vx = ship.vx + math.cos(ship.angle) * SHIP_THRUST * dt
+ship.vy = ship.vy + math.sin(ship.angle) * SHIP_THRUST * dt
+```
+
+That's most of the trigonometry in this whole game, and you'll see it over and over: **`cos` for x, `sin` for y**.
+
+### Rotating the shape
+
+To draw the ship at its current angle and position, we rotate every point of the shape, then move it. Rotating a point `(px, py)` by an angle uses a standard formula:
+
+```
+rotated x = px · cos(angle) − py · sin(angle)
+rotated y = px · sin(angle) + py · cos(angle)
+```
+
+You don't need to derive it. Just recognise it when you see it. Here it is as a reusable function:
+
+<div class="codefile">main.lua <span>06-ship</span></div>
+
+```lua
+-- Rotate a flat list of points {x1, y1, x2, y2, ...} by `angle`,
+-- then move them so (0, 0) lands on (x, y).
+local function transform(shape, x, y, angle)
+    local out = {}
+    local c, s = math.cos(angle), math.sin(angle)
+    for i = 1, #shape, 2 do
+        local px, py = shape[i], shape[i + 1]
+        out[i] = x + px * c - py * s
+        out[i + 1] = y + px * s + py * c
+    end
+    return out
+end
+```
+
+### Keyboard input: polling
+
+Chapter 5 used `love.keypressed`, which is an **event**: it fires once when a key goes down. For steering you want to know whether a key *is being held right now*, every frame. That's **polling**:
+
+```lua
+if love.keyboard.isDown("left", "a") then
+    ship.angle = ship.angle - SHIP_TURN * dt
+end
+```
+
+`isDown` accepts several keys and returns `true` if *any* of them is held, so arrow keys and WASD both work.
+
+### Drag and a speed limit
+
+Real space has no friction, but a little **drag** makes the ship controllable. Each second the ship should lose the same *fraction* of its speed. The frame-rate-independent way to write that is with `math.exp`:
+
+```lua
+local drag = math.exp(-SHIP_DRAG * dt)   -- a number just below 1
+ship.vx = ship.vx * drag
+ship.vy = ship.vy * drag
+```
+
+> **Gotcha:** A tempting shortcut is `ship.vx = ship.vx * 0.98` every frame. It works, but the ship then slows down *faster on faster computers*, because they run more frames per second. Anything that happens "per frame" needs `dt` in it somewhere.
+
+To cap the speed, we measure it with Pythagoras (`speed = √(vx² + vy²)`). If it's too fast, we scale both parts down so the direction stays the same:
+
+```lua
+local speed = math.sqrt(ship.vx * ship.vx + ship.vy * ship.vy)
+if speed > SHIP_MAX_SPEED then
+    ship.vx = ship.vx / speed * SHIP_MAX_SPEED
+    ship.vy = ship.vy / speed * SHIP_MAX_SPEED
+end
+```
+
+### Wrapping with `%`
+
+`%` gives the remainder after division, and it's the neatest way to wrap. `(810) % 800` is `10`, and in Lua `(-5) % 800` is `795`. So one line handles both edges:
+
+```lua
+ship.x = (ship.x + ship.vx * dt) % W
+```
+
+### The whole ship
+
+Replace `main.lua` with the full chapter checkpoint:
+
+<div class="codefile">main.lua <span>06-ship</span></div>
+
+```lua
+-- Chapter 6: a ship you can fly.
+-- Left/Right (or A/D) rotate, Up (or W) thrusts. Esc quits.
+
+local W, H = 800, 600
+
+local SHIP_TURN = 4.6 -- radians per second
+local SHIP_THRUST = 430 -- speed gained per second while thrusting
+local SHIP_DRAG = 0.5 -- how quickly the ship slows down
+local SHIP_MAX_SPEED = 540
+local SHIP_SHAPE = { 20, 0, -13, -12, -7, 0, -13, 12 } -- nose points right (+x)
+
+local ship
+
+-- Rotate a flat list of points {x1, y1, x2, y2, ...} by `angle`,
+-- then move them so (0, 0) lands on (x, y).
+local function transform(shape, x, y, angle)
+    local out = {}
+    local c, s = math.cos(angle), math.sin(angle)
+    for i = 1, #shape, 2 do
+        local px, py = shape[i], shape[i + 1]
+        out[i] = x + px * c - py * s
+        out[i + 1] = y + px * s + py * c
+    end
+    return out
+end
+
+function love.load()
+    ship = {
+        x = W / 2, y = H / 2,
+        vx = 0, vy = 0,
+        angle = -math.pi / 2, -- pointing up (angles are in radians)
+        thrusting = false,
+    }
+end
+
+function love.update(dt)
+    if love.keyboard.isDown("left", "a") then ship.angle = ship.angle - SHIP_TURN * dt end
+    if love.keyboard.isDown("right", "d") then ship.angle = ship.angle + SHIP_TURN * dt end
+
+    ship.thrusting = love.keyboard.isDown("up", "w")
+    if ship.thrusting then
+        ship.vx = ship.vx + math.cos(ship.angle) * SHIP_THRUST * dt
+        ship.vy = ship.vy + math.sin(ship.angle) * SHIP_THRUST * dt
+    end
+
+    -- drag: lose the same fraction of speed each second, whatever the frame rate
+    local drag = math.exp(-SHIP_DRAG * dt)
+    ship.vx = ship.vx * drag
+    ship.vy = ship.vy * drag
+
+    -- speed limit
+    local speed = math.sqrt(ship.vx * ship.vx + ship.vy * ship.vy)
+    if speed > SHIP_MAX_SPEED then
+        ship.vx = ship.vx / speed * SHIP_MAX_SPEED
+        ship.vy = ship.vy / speed * SHIP_MAX_SPEED
+    end
+
+    -- move, wrapping around the screen edges with % (remainder)
+    ship.x = (ship.x + ship.vx * dt) % W
+    ship.y = (ship.y + ship.vy * dt) % H
+end
+
+function love.draw()
+    love.graphics.setLineWidth(2)
+    love.graphics.setColor(0.25, 0.95, 1)
+    love.graphics.polygon("line", transform(SHIP_SHAPE, ship.x, ship.y, ship.angle))
+
+    if ship.thrusting then
+        local len = 10 + love.math.random() * 14 -- a flickering flame
+        love.graphics.setColor(1, 0.45, 0.25)
+        love.graphics.line(transform({ -9, -5, -9 - len, 0, -9, 5 }, ship.x, ship.y, ship.angle))
+    end
+end
+
+function love.keypressed(key)
+    if key == "escape" then
+        love.event.quit()
+    end
+end
+```
+
+![Flying the ship, with the thrust flame on](images/ch06.png)
+
+The flame is a little three-point line behind the ship. Its length is random every frame (`love.math.random()` returns a number between 0 and 1), which makes it flicker.
+
+> **Try it:** Change `SHIP_DRAG` to `0` for true, frictionless space, then to `3` for something like driving on ice. Change `SHIP_SHAPE` to design your own ship. Keep the nose pointing right.
+
+## 7. Bullets
+
+Bullets introduce an idea every game relies on: **a list of things that are created and destroyed while the game runs.**
+
+### A list of tables
+
+Each bullet is a small table with a position, a velocity and a remaining **life** in seconds:
+
+<div class="codefile">main.lua <span>07-bullets</span></div>
+
+```lua
+local function fire()
+    if #bullets >= MAX_BULLETS then return end
+    local c, s = math.cos(ship.angle), math.sin(ship.angle)
+    table.insert(bullets, {
+        x = ship.x + c * 20, -- start at the ship's nose
+        y = ship.y + s * 20,
+        vx = c * BULLET_SPEED + ship.vx, -- bullets inherit the ship's speed
+        vy = s * BULLET_SPEED + ship.vy,
+        life = BULLET_LIFE,
+    })
+end
+```
+
+- `table.insert(list, value)` adds to the end of the list.
+- Bullets start at the ship's nose (20 pixels ahead, in the facing direction).
+- Bullets **inherit the ship's velocity**. Without this, shooting while flying fast looks as if the bullets are dragging behind.
+- `MAX_BULLETS` limits how many can be on screen, which was part of the original game's challenge.
+
+Firing happens in `love.keypressed`, because one press should fire one shot. That's an event, not polling.
+
+### Removing things safely: loop backwards
+
+Each frame, every bullet moves and loses life, and dead bullets are removed:
+
+<div class="codefile">main.lua <span>07-bullets</span></div>
+
+```lua
+local function updateBullets(dt)
+    -- Walk the list backwards so removing a bullet doesn't skip the next one.
+    for i = #bullets, 1, -1 do
+        local b = bullets[i]
+        b.x = (b.x + b.vx * dt) % W
+        b.y = (b.y + b.vy * dt) % H
+        b.life = b.life - dt
+        if b.life <= 0 then
+            table.remove(bullets, i)
+        end
+    end
+end
+```
+
+Why does the loop run **backwards** (`#bullets, 1, -1`)? `table.remove(list, i)` shifts every later item down by one. Going forwards, removing item 3 moves item 4 into slot 3, and the loop moves straight on to slot 4, *skipping* the old item 4. Going backwards, the shifted items have already been visited, so nothing is skipped.
+
+> **Gotcha:** Whenever you remove items from a list you're looping over, loop backwards. It's one of the most common bugs in game code.
+
+### Tidying up with functions
+
+`love.update` was getting long, so this chapter moves the ship code into `updateShip(dt)` and adds `updateBullets(dt)`. `love.update` just calls them in order. Both are `local function`s written *above* `love.update`, because a local function must be defined before the code that uses it.
+
+<div class="codefile">main.lua <span>07-bullets</span></div>
+
+```lua
+-- Chapter 7: bullets.
+-- Left/Right rotate, Up thrusts, Space fires. Esc quits.
+
+local W, H = 800, 600
+
+local SHIP_TURN = 4.6
+local SHIP_THRUST = 430
+local SHIP_DRAG = 0.5
+local SHIP_MAX_SPEED = 540
+local SHIP_SHAPE = { 20, 0, -13, -12, -7, 0, -13, 12 }
+
+local BULLET_SPEED = 780
+local BULLET_LIFE = 0.8 -- seconds before a bullet fizzles out
+local MAX_BULLETS = 8
+
+local ship
+local bullets = {}
+
+local function transform(shape, x, y, angle)
+    local out = {}
+    local c, s = math.cos(angle), math.sin(angle)
+    for i = 1, #shape, 2 do
+        local px, py = shape[i], shape[i + 1]
+        out[i] = x + px * c - py * s
+        out[i + 1] = y + px * s + py * c
+    end
+    return out
+end
+
+local function fire()
+    if #bullets >= MAX_BULLETS then return end
+    local c, s = math.cos(ship.angle), math.sin(ship.angle)
+    table.insert(bullets, {
+        x = ship.x + c * 20, -- start at the ship's nose
+        y = ship.y + s * 20,
+        vx = c * BULLET_SPEED + ship.vx, -- bullets inherit the ship's speed
+        vy = s * BULLET_SPEED + ship.vy,
+        life = BULLET_LIFE,
+    })
+end
+
+function love.load()
+    ship = { x = W / 2, y = H / 2, vx = 0, vy = 0, angle = -math.pi / 2, thrusting = false }
+end
+
+local function updateShip(dt)
+    if love.keyboard.isDown("left", "a") then ship.angle = ship.angle - SHIP_TURN * dt end
+    if love.keyboard.isDown("right", "d") then ship.angle = ship.angle + SHIP_TURN * dt end
+
+    ship.thrusting = love.keyboard.isDown("up", "w")
+    if ship.thrusting then
+        ship.vx = ship.vx + math.cos(ship.angle) * SHIP_THRUST * dt
+        ship.vy = ship.vy + math.sin(ship.angle) * SHIP_THRUST * dt
+    end
+
+    local drag = math.exp(-SHIP_DRAG * dt)
+    ship.vx = ship.vx * drag
+    ship.vy = ship.vy * drag
+
+    local speed = math.sqrt(ship.vx * ship.vx + ship.vy * ship.vy)
+    if speed > SHIP_MAX_SPEED then
+        ship.vx = ship.vx / speed * SHIP_MAX_SPEED
+        ship.vy = ship.vy / speed * SHIP_MAX_SPEED
+    end
+
+    ship.x = (ship.x + ship.vx * dt) % W
+    ship.y = (ship.y + ship.vy * dt) % H
+end
+
+local function updateBullets(dt)
+    -- Walk the list backwards so removing a bullet doesn't skip the next one.
+    for i = #bullets, 1, -1 do
+        local b = bullets[i]
+        b.x = (b.x + b.vx * dt) % W
+        b.y = (b.y + b.vy * dt) % H
+        b.life = b.life - dt
+        if b.life <= 0 then
+            table.remove(bullets, i)
+        end
+    end
+end
+
+function love.update(dt)
+    updateShip(dt)
+    updateBullets(dt)
+end
+
+function love.draw()
+    love.graphics.setLineWidth(2)
+    love.graphics.setColor(0.25, 0.95, 1)
+    love.graphics.polygon("line", transform(SHIP_SHAPE, ship.x, ship.y, ship.angle))
+
+    if ship.thrusting then
+        local len = 10 + love.math.random() * 14
+        love.graphics.setColor(1, 0.45, 0.25)
+        love.graphics.line(transform({ -9, -5, -9 - len, 0, -9, 5 }, ship.x, ship.y, ship.angle))
+    end
+
+    -- each bullet is a short streak pointing back along its path
+    love.graphics.setColor(1, 0.95, 0.5)
+    for _, b in ipairs(bullets) do
+        love.graphics.line(b.x, b.y, b.x - b.vx * 0.022, b.y - b.vy * 0.022)
+    end
+end
+
+function love.keypressed(key)
+    if key == "space" then
+        fire()
+    elseif key == "escape" then
+        love.event.quit()
+    end
+end
+```
+
+![Bullets streaking from the ship](images/ch07.png)
+
+Each bullet is drawn as a short line pointing back along its velocity (`b.x - b.vx * 0.022`), so fast bullets look like streaks.
+
+> **Try it:** Make a "shotgun" that fires three bullets at once, at `ship.angle - 0.15`, `ship.angle` and `ship.angle + 0.15`. You'll need to give `fire` an angle parameter.
+
+## 8. Asteroids
+
+### Making random rocks
+
+Every asteroid gets its own lumpy shape. The trick is to walk around a circle, placing 10–14 points, each at a slightly random distance from the centre:
+
+<div class="codefile">main.lua <span>08-asteroids</span></div>
+
+```lua
+local function newAsteroid(size, x, y)
+    local def = ASTEROID[size]
+    -- a lumpy circle: 10-14 points, each at a slightly random distance
+    local n = rnd(10, 14)
+    local verts = {}
+    for i = 0, n - 1 do
+        local ang = (i + (rnd() - 0.5) * 0.5) / n * TAU
+        local rad = def.radius * (0.7 + rnd() * 0.35)
+        table.insert(verts, math.cos(ang) * rad)
+        table.insert(verts, math.sin(ang) * rad)
+    end
+    -- drift in a random direction at a random speed for its size
+    local ang = rnd() * TAU
+    local speed = def.speedLo + rnd() * (def.speedHi - def.speedLo)
+    return {
+        x = x, y = y,
+        vx = math.cos(ang) * speed, vy = math.sin(ang) * speed,
+        size = size, radius = def.radius,
+        angle = rnd() * TAU, spin = (rnd() - 0.5) * (0.8 + (3 - size) * 0.6),
+        verts = verts,
+    }
+end
+```
+
+- **`rnd`** is a local shortcut for `love.math.random`. Called with no arguments it gives a decimal between 0 and 1. With two whole numbers, `rnd(10, 14)`, it gives a whole number in that range, both ends included.
+- `TAU` is `2π`, a full turn. `i / n * TAU` spaces the points evenly around the circle, and `(rnd() - 0.5) * 0.5` nudges each one a little.
+- `0.7 + rnd() * 0.35` makes each point between 70% and 105% of the radius. That's what makes the rock lumpy.
+- Each asteroid also gets a random direction, speed and **spin**. Smaller rocks spin faster.
+
+### Data tables
+
+The sizes are described in one table, not scattered through the code:
+
+<div class="codefile">main.lua <span>08-asteroids</span></div>
+
+```lua
+local ASTEROID = {
+    [3] = { radius = 54, speedLo = 35, speedHi = 75 },
+    [2] = { radius = 29, speedLo = 55, speedHi = 115 },
+    [1] = { radius = 15, speedLo = 75, speedHi = 165 },
+}
+```
+
+`ASTEROID[3]` is "everything about large asteroids". When Chapter 9 adds scores, and later chapters add explosion sizes and sounds, they'll just be new fields in this table. Keeping tuning numbers together makes a game much easier to balance.
+
+### Drawing across the edges
+
+When a big asteroid drifts halfway off the right edge, the part that's gone should appear on the left. We draw it **twice**: once where it is, and once shifted by the screen width.
+
+<div class="codefile">main.lua <span>08-asteroids</span></div>
+
+```lua
+local function drawWrapped(x, y, r, fn, obj)
+    local x2 = (x < r and W) or (x > W - r and -W) or nil
+    local y2 = (y < r and H) or (y > H - r and -H) or nil
+    fn(obj)
+    if x2 then love.graphics.push(); love.graphics.translate(x2, 0); fn(obj); love.graphics.pop() end
+    if y2 then love.graphics.push(); love.graphics.translate(0, y2); fn(obj); love.graphics.pop() end
+    if x2 and y2 then love.graphics.push(); love.graphics.translate(x2, y2); fn(obj); love.graphics.pop() end
+end
+```
+
+Two new ideas here:
+
+- **`love.graphics.push()` / `translate(dx, dy)` / `pop()`**: `translate` shifts everything drawn afterwards. `push` saves the current drawing state and `pop` restores it, so the shift only affects the code in between.
+- **Passing a function as an argument:** `drawWrapped` doesn't know *how* to draw an asteroid or a ship. You give it the drawing function (`fn`) and the thing to draw (`obj`), and it calls `fn(obj)` up to four times. This works because functions are values in Lua.
+
+<div class="codefile">main.lua <span>08-asteroids</span></div>
+
+```lua
+-- Chapter 8: asteroids.
+-- Randomly shaped rocks drift, spin and wrap. Nothing collides yet.
+
+local W, H = 800, 600
+local TAU = math.pi * 2 -- one full turn, in radians
+local rnd = love.math.random -- short name for a function we use a lot
+
+local SHIP_TURN = 4.6
+local SHIP_THRUST = 430
+local SHIP_DRAG = 0.5
+local SHIP_MAX_SPEED = 540
+local SHIP_SHAPE = { 20, 0, -13, -12, -7, 0, -13, 12 }
+
+local BULLET_SPEED = 780
+local BULLET_LIFE = 0.8
+local MAX_BULLETS = 8
+
+-- One entry per asteroid size: 3 = large, 2 = medium, 1 = small.
+local ASTEROID = {
+    [3] = { radius = 54, speedLo = 35, speedHi = 75 },
+    [2] = { radius = 29, speedLo = 55, speedHi = 115 },
+    [1] = { radius = 15, speedLo = 75, speedHi = 165 },
+}
+
+local ship
+local bullets = {}
+local asteroids = {}
+
+local function transform(shape, x, y, angle)
+    local out = {}
+    local c, s = math.cos(angle), math.sin(angle)
+    for i = 1, #shape, 2 do
+        local px, py = shape[i], shape[i + 1]
+        out[i] = x + px * c - py * s
+        out[i + 1] = y + px * s + py * c
+    end
+    return out
+end
+
+-- Call fn(obj) to draw it, then again shifted by a screen width/height when
+-- it pokes over an edge, so it appears on both sides at once.
+local function drawWrapped(x, y, r, fn, obj)
+    local x2 = (x < r and W) or (x > W - r and -W) or nil
+    local y2 = (y < r and H) or (y > H - r and -H) or nil
+    fn(obj)
+    if x2 then love.graphics.push(); love.graphics.translate(x2, 0); fn(obj); love.graphics.pop() end
+    if y2 then love.graphics.push(); love.graphics.translate(0, y2); fn(obj); love.graphics.pop() end
+    if x2 and y2 then love.graphics.push(); love.graphics.translate(x2, y2); fn(obj); love.graphics.pop() end
+end
+
+local function newAsteroid(size, x, y)
+    local def = ASTEROID[size]
+    -- a lumpy circle: 10-14 points, each at a slightly random distance
+    local n = rnd(10, 14)
+    local verts = {}
+    for i = 0, n - 1 do
+        local ang = (i + (rnd() - 0.5) * 0.5) / n * TAU
+        local rad = def.radius * (0.7 + rnd() * 0.35)
+        table.insert(verts, math.cos(ang) * rad)
+        table.insert(verts, math.sin(ang) * rad)
+    end
+    -- drift in a random direction at a random speed for its size
+    local ang = rnd() * TAU
+    local speed = def.speedLo + rnd() * (def.speedHi - def.speedLo)
+    return {
+        x = x, y = y,
+        vx = math.cos(ang) * speed, vy = math.sin(ang) * speed,
+        size = size, radius = def.radius,
+        angle = rnd() * TAU, spin = (rnd() - 0.5) * (0.8 + (3 - size) * 0.6),
+        verts = verts,
+    }
+end
+
+local function fire()
+    if #bullets >= MAX_BULLETS then return end
+    local c, s = math.cos(ship.angle), math.sin(ship.angle)
+    table.insert(bullets, {
+        x = ship.x + c * 20, y = ship.y + s * 20,
+        vx = c * BULLET_SPEED + ship.vx, vy = s * BULLET_SPEED + ship.vy,
+        life = BULLET_LIFE,
+    })
+end
+
+function love.load()
+    ship = { x = W / 2, y = H / 2, vx = 0, vy = 0, angle = -math.pi / 2, thrusting = false }
+    for _ = 1, 4 do
+        table.insert(asteroids, newAsteroid(3, rnd() * W, rnd() * H))
+    end
+end
+
+local function updateShip(dt)
+    if love.keyboard.isDown("left", "a") then ship.angle = ship.angle - SHIP_TURN * dt end
+    if love.keyboard.isDown("right", "d") then ship.angle = ship.angle + SHIP_TURN * dt end
+
+    ship.thrusting = love.keyboard.isDown("up", "w")
+    if ship.thrusting then
+        ship.vx = ship.vx + math.cos(ship.angle) * SHIP_THRUST * dt
+        ship.vy = ship.vy + math.sin(ship.angle) * SHIP_THRUST * dt
+    end
+
+    local drag = math.exp(-SHIP_DRAG * dt)
+    ship.vx = ship.vx * drag
+    ship.vy = ship.vy * drag
+
+    local speed = math.sqrt(ship.vx * ship.vx + ship.vy * ship.vy)
+    if speed > SHIP_MAX_SPEED then
+        ship.vx = ship.vx / speed * SHIP_MAX_SPEED
+        ship.vy = ship.vy / speed * SHIP_MAX_SPEED
+    end
+
+    ship.x = (ship.x + ship.vx * dt) % W
+    ship.y = (ship.y + ship.vy * dt) % H
+end
+
+local function updateBullets(dt)
+    for i = #bullets, 1, -1 do
+        local b = bullets[i]
+        b.x = (b.x + b.vx * dt) % W
+        b.y = (b.y + b.vy * dt) % H
+        b.life = b.life - dt
+        if b.life <= 0 then
+            table.remove(bullets, i)
+        end
+    end
+end
+
+local function moveAsteroids(dt)
+    for _, a in ipairs(asteroids) do
+        a.x = (a.x + a.vx * dt) % W
+        a.y = (a.y + a.vy * dt) % H
+        a.angle = a.angle + a.spin * dt
+    end
+end
+
+function love.update(dt)
+    updateShip(dt)
+    updateBullets(dt)
+    moveAsteroids(dt)
+end
+
+local function drawAsteroid(a)
+    love.graphics.setColor(1, 0.4, 0.85)
+    love.graphics.polygon("line", transform(a.verts, a.x, a.y, a.angle))
+end
+
+local function drawShip(s)
+    love.graphics.setColor(0.25, 0.95, 1)
+    love.graphics.polygon("line", transform(SHIP_SHAPE, s.x, s.y, s.angle))
+    if s.thrusting then
+        local len = 10 + rnd() * 14
+        love.graphics.setColor(1, 0.45, 0.25)
+        love.graphics.line(transform({ -9, -5, -9 - len, 0, -9, 5 }, s.x, s.y, s.angle))
+    end
+end
+
+function love.draw()
+    love.graphics.setLineWidth(2)
+    for _, a in ipairs(asteroids) do
+        drawWrapped(a.x, a.y, a.radius + 8, drawAsteroid, a)
+    end
+    drawWrapped(ship.x, ship.y, 32, drawShip, ship)
+
+    love.graphics.setColor(1, 0.95, 0.5)
+    for _, b in ipairs(bullets) do
+        love.graphics.line(b.x, b.y, b.x - b.vx * 0.022, b.y - b.vy * 0.022)
+    end
+end
+
+function love.keypressed(key)
+    if key == "space" then
+        fire()
+    elseif key == "escape" then
+        love.event.quit()
+    end
+end
+```
+
+![Four large asteroids drifting](images/ch08.png)
+
+> **Try it:** Change the `for _ = 1, 4` in `love.load` to spawn a mix of sizes: `newAsteroid(rnd(1, 3), ...)`. Try `rnd(6, 8)` points instead of `rnd(10, 14)` for chunkier rocks.
+
+## 9. Collisions, lives and waves
+
+Time to make it a game.
+
+### Circle collisions
+
+Asteroids are lumpy, but for collisions we pretend everything is a **circle**. Two circles overlap when the distance between their centres is less than their radii added together:
+
+```
+    distance < radiusA + radiusB    →  hit!
+```
+
+Distance comes from Pythagoras again: `√(dx² + dy²)`. It's quick to compute and forgiving to play against. We shrink each asteroid's radius a little (`a.radius * 0.9`), because players feel cheated by hits that "didn't touch", never by near misses.
+
+### Distance on a wrapping screen
+
+On a wrapping screen, an asteroid at `x = 790` and a bullet at `x = 5` are only 15 pixels apart, across the edge. `wrapDelta` finds the shortest way around:
+
+<div class="codefile">main.lua <span>09-collisions</span></div>
+
+```lua
+-- On a wrapping screen the shortest way from a to b might cross an edge.
+local function wrapDelta(d, size)
+    if d > size / 2 then return d - size end
+    if d < -size / 2 then return d + size end
+    return d
+end
+
+local function wrappedDist(ax, ay, bx, by)
+    local dx, dy = wrapDelta(bx - ax, W), wrapDelta(by - ay, H)
+    return math.sqrt(dx * dx + dy * dy)
+end
+```
+
+### Checking every bullet against every asteroid
+
+<div class="codefile">main.lua <span>09-collisions</span></div>
+
+```lua
+local function collide()
+    -- bullets vs asteroids
+    for i = #bullets, 1, -1 do
+        local b = bullets[i]
+        for j = #asteroids, 1, -1 do
+            local a = asteroids[j]
+            if wrappedDist(b.x, b.y, a.x, a.y) < a.radius * 0.9 then
+                destroyAsteroid(j)
+                table.remove(bullets, i)
+                break -- this bullet is gone; move on to the next bullet
+            end
+        end
+    end
+
+    -- ship vs asteroids
+    if ship.alive and ship.invuln <= 0 then
+        for j = #asteroids, 1, -1 do
+            local a = asteroids[j]
+            if wrappedDist(ship.x, ship.y, a.x, a.y) < a.radius * 0.85 + SHIP_RADIUS then
+                destroyAsteroid(j)
+                killShip()
+                break
+            end
+        end
+    end
+end
+```
+
+Both loops run backwards because both can remove items. After a hit, `break` stops checking the dead bullet against other asteroids.
+
+### Splitting
+
+When an asteroid is destroyed, a size 3 becomes two size 2s, and a size 2 becomes two size 1s:
+
+<div class="codefile">main.lua <span>09-collisions</span></div>
+
+```lua
+local function destroyAsteroid(i)
+    local a = table.remove(asteroids, i)
+    score = score + ASTEROID[a.size].score
+    if a.size > 1 then
+        for _ = 1, 2 do
+            local child = newAsteroid(a.size - 1, a.x, a.y)
+            child.vx = child.vx + a.vx * 0.5 -- keep some of the parent's motion
+            child.vy = child.vy + a.vy * 0.5
+            table.insert(asteroids, child)
+        end
+    end
+end
+```
+
+Each child keeps half of its parent's velocity, so the pieces carry on in roughly the same direction.
+
+### Lives, respawning and invulnerability
+
+When the ship is hit, `killShip` sets `ship.alive = false` and starts a `respawnTimer`. `love.update` counts it down. A new ship spawns when it reaches zero, or it's game over if there are no lives left. New ships are **invulnerable** for 2.5 seconds (`SPAWN_INVULN`) so you don't die the moment you appear, and they blink while it lasts:
+
+```lua
+if s.invuln > 0 and math.floor(s.invuln * 10) % 2 == 0 then return end
+```
+
+`math.floor(s.invuln * 10)` counts down in tenths of a second, and `% 2 == 0` is true every other tenth. The ship skips drawing on those frames, so it blinks five times a second.
+
+### Waves and fonts
+
+When the last asteroid is destroyed, `waveDelay` gives a two-second breather, then `spawnWave` creates one more large asteroid than the previous wave (capped at 11). It picks spots at least 200 pixels from the ship.
+
+Text uses fonts. `love.graphics.newFont(40)` creates a font at size 40, and `setFont` chooses which one `print` uses.
+
+> **Gotcha:** Create fonts, images and sounds **once** (in `love.load`), never inside `love.draw`. Creating a font every frame makes the game slower and slower. The first version of this game did exactly that.
+
+`love.graphics.printf(text, x, y, width, "center")` centres text within a box `width` pixels wide, which is how "GAME OVER" sits in the middle.
+
+### The complete game
+
+<div class="codefile">main.lua <span>09-collisions</span></div>
+
+```lua
+-- Chapter 9: collisions, score, lives and waves — a complete (plain) Asteroids.
+-- Left/Right rotate, Up thrusts, Space fires. Esc quits.
+
+local W, H = 800, 600
+local TAU = math.pi * 2
+local rnd = love.math.random
+
+local SHIP_RADIUS = 13 -- for collisions: the ship counts as a circle this big
+local SHIP_TURN = 4.6
+local SHIP_THRUST = 430
+local SHIP_DRAG = 0.5
+local SHIP_MAX_SPEED = 540
+local SHIP_SHAPE = { 20, 0, -13, -12, -7, 0, -13, 12 }
+
+local BULLET_SPEED = 780
+local BULLET_LIFE = 0.8
+local MAX_BULLETS = 8
+
+local START_LIVES = 3
+local RESPAWN_DELAY = 2.2 -- seconds between dying and the next ship
+local SPAWN_INVULN = 2.5 -- seconds a new ship can't be hurt
+
+local ASTEROID = {
+    [3] = { radius = 54, score = 20, speedLo = 35, speedHi = 75 },
+    [2] = { radius = 29, score = 50, speedLo = 55, speedHi = 115 },
+    [1] = { radius = 15, score = 100, speedLo = 75, speedHi = 165 },
+}
+
+local ship, bullets, asteroids
+local score, lives, wave
+local respawnTimer, waveDelay
+local gameOver = false
+local smallFont, bigFont
+
+-- ============================================================
+-- HELPERS
+-- ============================================================
+local function transform(shape, x, y, angle)
+    local out = {}
+    local c, s = math.cos(angle), math.sin(angle)
+    for i = 1, #shape, 2 do
+        local px, py = shape[i], shape[i + 1]
+        out[i] = x + px * c - py * s
+        out[i + 1] = y + px * s + py * c
+    end
+    return out
+end
+
+local function drawWrapped(x, y, r, fn, obj)
+    local x2 = (x < r and W) or (x > W - r and -W) or nil
+    local y2 = (y < r and H) or (y > H - r and -H) or nil
+    fn(obj)
+    if x2 then love.graphics.push(); love.graphics.translate(x2, 0); fn(obj); love.graphics.pop() end
+    if y2 then love.graphics.push(); love.graphics.translate(0, y2); fn(obj); love.graphics.pop() end
+    if x2 and y2 then love.graphics.push(); love.graphics.translate(x2, y2); fn(obj); love.graphics.pop() end
+end
+
+-- On a wrapping screen the shortest way from a to b might cross an edge.
+local function wrapDelta(d, size)
+    if d > size / 2 then return d - size end
+    if d < -size / 2 then return d + size end
+    return d
+end
+
+local function wrappedDist(ax, ay, bx, by)
+    local dx, dy = wrapDelta(bx - ax, W), wrapDelta(by - ay, H)
+    return math.sqrt(dx * dx + dy * dy)
+end
+
+-- ============================================================
+-- ENTITIES
+-- ============================================================
+local function newAsteroid(size, x, y)
+    local def = ASTEROID[size]
+    local n = rnd(10, 14)
+    local verts = {}
+    for i = 0, n - 1 do
+        local ang = (i + (rnd() - 0.5) * 0.5) / n * TAU
+        local rad = def.radius * (0.7 + rnd() * 0.35)
+        table.insert(verts, math.cos(ang) * rad)
+        table.insert(verts, math.sin(ang) * rad)
+    end
+    local ang = rnd() * TAU
+    local speed = def.speedLo + rnd() * (def.speedHi - def.speedLo)
+    return {
+        x = x, y = y,
+        vx = math.cos(ang) * speed, vy = math.sin(ang) * speed,
+        size = size, radius = def.radius,
+        angle = rnd() * TAU, spin = (rnd() - 0.5) * (0.8 + (3 - size) * 0.6),
+        verts = verts,
+    }
+end
+
+local function newShip()
+    return {
+        x = W / 2, y = H / 2, vx = 0, vy = 0, angle = -math.pi / 2,
+        thrusting = false, alive = true, invuln = SPAWN_INVULN,
+    }
+end
+
+local function spawnWave()
+    local count = math.min(3 + wave, 11)
+    for _ = 1, count do
+        -- pick a spot at least 200 px from the ship
+        local x, y
+        for _ = 1, 30 do
+            x, y = rnd() * W, rnd() * H
+            if wrappedDist(x, y, ship.x, ship.y) > 200 then break end
+        end
+        table.insert(asteroids, newAsteroid(3, x, y))
+    end
+end
+
+local function startGame()
+    score, lives, wave = 0, START_LIVES, 1
+    bullets, asteroids = {}, {}
+    ship = newShip()
+    respawnTimer, waveDelay = 0, nil
+    gameOver = false
+    spawnWave()
+end
+
+-- Remove asteroid i, award points, and split it into two smaller ones.
+local function destroyAsteroid(i)
+    local a = table.remove(asteroids, i)
+    score = score + ASTEROID[a.size].score
+    if a.size > 1 then
+        for _ = 1, 2 do
+            local child = newAsteroid(a.size - 1, a.x, a.y)
+            child.vx = child.vx + a.vx * 0.5 -- keep some of the parent's motion
+            child.vy = child.vy + a.vy * 0.5
+            table.insert(asteroids, child)
+        end
+    end
+end
+
+local function killShip()
+    ship.alive = false
+    lives = lives - 1
+    respawnTimer = RESPAWN_DELAY
+end
+
+local function fire()
+    if #bullets >= MAX_BULLETS then return end
+    local c, s = math.cos(ship.angle), math.sin(ship.angle)
+    table.insert(bullets, {
+        x = ship.x + c * 20, y = ship.y + s * 20,
+        vx = c * BULLET_SPEED + ship.vx, vy = s * BULLET_SPEED + ship.vy,
+        life = BULLET_LIFE,
+    })
+end
+
+-- ============================================================
+-- UPDATE
+-- ============================================================
+local function updateShip(dt)
+    if love.keyboard.isDown("left", "a") then ship.angle = ship.angle - SHIP_TURN * dt end
+    if love.keyboard.isDown("right", "d") then ship.angle = ship.angle + SHIP_TURN * dt end
+
+    ship.thrusting = love.keyboard.isDown("up", "w")
+    if ship.thrusting then
+        ship.vx = ship.vx + math.cos(ship.angle) * SHIP_THRUST * dt
+        ship.vy = ship.vy + math.sin(ship.angle) * SHIP_THRUST * dt
+    end
+
+    local drag = math.exp(-SHIP_DRAG * dt)
+    ship.vx = ship.vx * drag
+    ship.vy = ship.vy * drag
+
+    local speed = math.sqrt(ship.vx * ship.vx + ship.vy * ship.vy)
+    if speed > SHIP_MAX_SPEED then
+        ship.vx = ship.vx / speed * SHIP_MAX_SPEED
+        ship.vy = ship.vy / speed * SHIP_MAX_SPEED
+    end
+
+    ship.x = (ship.x + ship.vx * dt) % W
+    ship.y = (ship.y + ship.vy * dt) % H
+    ship.invuln = math.max(0, ship.invuln - dt)
+end
+
+local function updateBullets(dt)
+    for i = #bullets, 1, -1 do
+        local b = bullets[i]
+        b.x = (b.x + b.vx * dt) % W
+        b.y = (b.y + b.vy * dt) % H
+        b.life = b.life - dt
+        if b.life <= 0 then
+            table.remove(bullets, i)
+        end
+    end
+end
+
+local function moveAsteroids(dt)
+    for _, a in ipairs(asteroids) do
+        a.x = (a.x + a.vx * dt) % W
+        a.y = (a.y + a.vy * dt) % H
+        a.angle = a.angle + a.spin * dt
+    end
+end
+
+local function collide()
+    -- bullets vs asteroids
+    for i = #bullets, 1, -1 do
+        local b = bullets[i]
+        for j = #asteroids, 1, -1 do
+            local a = asteroids[j]
+            if wrappedDist(b.x, b.y, a.x, a.y) < a.radius * 0.9 then
+                destroyAsteroid(j)
+                table.remove(bullets, i)
+                break -- this bullet is gone; move on to the next bullet
+            end
+        end
+    end
+
+    -- ship vs asteroids
+    if ship.alive and ship.invuln <= 0 then
+        for j = #asteroids, 1, -1 do
+            local a = asteroids[j]
+            if wrappedDist(ship.x, ship.y, a.x, a.y) < a.radius * 0.85 + SHIP_RADIUS then
+                destroyAsteroid(j)
+                killShip()
+                break
+            end
+        end
+    end
+end
+
+function love.load()
+    love.window.setTitle("Asteroids")
+    -- Create fonts once, here. Making a new font every frame is slow.
+    smallFont = love.graphics.newFont(16)
+    bigFont = love.graphics.newFont(40)
+    startGame()
+end
+
+function love.update(dt)
+    if gameOver then
+        moveAsteroids(dt)
+        return
+    end
+
+    if ship.alive then
+        updateShip(dt)
+    else
+        respawnTimer = respawnTimer - dt
+        if respawnTimer <= 0 then
+            if lives > 0 then
+                ship = newShip()
+            else
+                gameOver = true
+            end
+        end
+    end
+
+    updateBullets(dt)
+    moveAsteroids(dt)
+    collide()
+
+    -- all asteroids gone: wait a moment, then start the next wave
+    if #asteroids == 0 and not waveDelay then
+        waveDelay = 2
+    end
+    if waveDelay then
+        waveDelay = waveDelay - dt
+        if waveDelay <= 0 then
+            waveDelay = nil
+            wave = wave + 1
+            spawnWave()
+        end
+    end
+end
+
+-- ============================================================
+-- DRAW
+-- ============================================================
+local function drawAsteroid(a)
+    love.graphics.setColor(1, 0.4, 0.85)
+    love.graphics.polygon("line", transform(a.verts, a.x, a.y, a.angle))
+end
+
+local function drawShip(s)
+    -- blink while invulnerable: visible for 0.1 s, hidden for 0.1 s
+    if s.invuln > 0 and math.floor(s.invuln * 10) % 2 == 0 then return end
+    love.graphics.setColor(0.25, 0.95, 1)
+    love.graphics.polygon("line", transform(SHIP_SHAPE, s.x, s.y, s.angle))
+    if s.thrusting then
+        local len = 10 + rnd() * 14
+        love.graphics.setColor(1, 0.45, 0.25)
+        love.graphics.line(transform({ -9, -5, -9 - len, 0, -9, 5 }, s.x, s.y, s.angle))
+    end
+end
+
+function love.draw()
+    love.graphics.setLineWidth(2)
+    for _, a in ipairs(asteroids) do
+        drawWrapped(a.x, a.y, a.radius + 8, drawAsteroid, a)
+    end
+    if ship.alive and not gameOver then
+        drawWrapped(ship.x, ship.y, 32, drawShip, ship)
+    end
+
+    love.graphics.setColor(1, 0.95, 0.5)
+    for _, b in ipairs(bullets) do
+        love.graphics.line(b.x, b.y, b.x - b.vx * 0.022, b.y - b.vy * 0.022)
+    end
+
+    love.graphics.setColor(1, 1, 1)
+    love.graphics.setFont(smallFont)
+    love.graphics.print("SCORE " .. score .. "    LIVES " .. lives .. "    WAVE " .. wave, 10, 10)
+
+    if gameOver then
+        love.graphics.setFont(bigFont)
+        love.graphics.printf("GAME OVER", 0, H / 2 - 60, W, "center")
+        love.graphics.setFont(smallFont)
+        love.graphics.printf("Press Enter to play again", 0, H / 2 + 10, W, "center")
+    end
+end
+
+function love.keypressed(key)
+    if key == "space" and not gameOver and ship.alive then
+        fire()
+    elseif key == "return" and gameOver then
+        startGame()
+    elseif key == "escape" then
+        love.event.quit()
+    end
+end
+```
+
+![A complete (if plain) game of Asteroids](images/ch09.png)
+
+**This is a real game.** Everything from here on is about structure, then *juice*: the glow, the sparks, the shake and the sound that turn a plain game into one that feels great. Play it for a while and notice how flat it feels. By Chapter 18 you won't recognise it.
+
+> **Try it:** Add an extra life every 5,000 points. Keep a `nextLife` variable, and whenever `score >= nextLife`, add a life and raise `nextLife` by 5,000. Then show a message for two seconds when you get one.
+
+<div class="part">Part 3 · Growing the project</div>
+
+## 10. Files, screens and a proper structure
+
+Chapter 9's single file is about 330 lines. The finished game is over 1,500 lines. One giant file becomes hard to find your way around, so before adding effects we'll reorganise, and add three things every real game needs:
+
+1. **Several files**, each with one job.
+2. **Screens** (modes): a title screen, the game itself, and a game-over screen.
+3. **Resolution independence**: the game looks right in any window size, or fullscreen.
+
+This chapter is mostly *reorganisation* of code you already understand, so the easiest way through it is to **copy the checkpoint `tutorial/10-structure` into your project** (replacing your `main.lua`), then read along. The new ideas are explained below.
+
+The new layout:
+
+```
+my-asteroids/
+├── conf.lua        window settings, read before the game starts
+├── main.lua        glue: scaling to the window, passing input to the game
+└── src/
+    └── game.lua    the whole game: state, entities, update, draw
+```
+
+Over the next chapters `src/` will gain `neon.lua`, `fx.lua`, `glow.lua` and `sfx.lua`, one module per effect.
+
+### conf.lua
+
+LÖVE runs `conf.lua` *before* it opens the window, so window settings belong here:
+
+<div class="codefile">conf.lua <span>10-structure</span></div>
+
+```lua
+function love.conf(t)
+    t.identity = "neon-asteroids" -- save folder (high score)
+    t.version = "11.5"
+
+    t.window.title = "Neon Asteroids"
+    t.window.width = 1280
+    t.window.height = 720
+    t.window.resizable = true
+    t.window.minwidth = 640
+    t.window.minheight = 360
+    t.window.vsync = 1
+    t.window.msaa = 0 -- antialiasing happens on the glow scene canvas instead
+
+    t.modules.physics = false
+    t.modules.video = false
+end
+```
+
+`t.identity` names the folder where the game can save files (we'll save the high score there). Turning off modules we don't use (`physics`, `video`) makes startup slightly faster.
+
+### A bigger virtual screen, scaled to fit
+
+The game is designed for a fixed **1280 × 720 "virtual" screen**. All positions, speeds and sizes are in those units. `main.lua` scales that screen to fit whatever window the player has, adding black bars (**letterboxing**) if the shape doesn't match:
+
+<div class="codefile">main.lua <span>10-structure</span></div>
+
+```lua
+-- Neon Asteroids
+
+local Game = require "src.game"
+
+local view = { scale = 1, x = 0, y = 0 }
+
+-- Letterbox the fixed virtual screen into the window.
+local function fitView(w, h)
+    view.scale = math.min(w / Game.W, h / Game.H)
+    view.x = math.floor((w - Game.W * view.scale) / 2)
+    view.y = math.floor((h - Game.H * view.scale) / 2)
+end
+
+function love.load()
+    love.graphics.setDefaultFilter("linear", "linear")
+    love.mouse.setVisible(false)
+    fitView(love.graphics.getDimensions())
+    Game.load()
+end
+
+function love.resize(w, h)
+    fitView(w, h)
+end
+
+function love.update(dt)
+    Game.update(math.min(dt, 1 / 30))
+end
+
+function love.draw()
+    love.graphics.push()
+    love.graphics.translate(view.x, view.y)
+    love.graphics.scale(view.scale)
+    love.graphics.setScissor(view.x, view.y, math.ceil(Game.W * view.scale), math.ceil(Game.H * view.scale))
+    Game.draw()
+    love.graphics.setScissor()
+    love.graphics.pop()
+end
+
+function love.keypressed(key, scancode, isrepeat)
+    if key == "f11" or (key == "return" and love.keyboard.isDown("lalt", "ralt")) then
+        love.window.setFullscreen(not love.window.getFullscreen(), "desktop")
+        return
+    end
+    Game.keypressed(key, isrepeat)
+end
+```
+
+- `fitView` works out the largest scale at which 1280 × 720 fits the window, and the offsets that centre it.
+- In `love.draw`, `translate` + `scale` mean the game can *draw* in 1280 × 720 coordinates and LÖVE stretches it to fit. **The game code never needs to know the real window size.**
+- `setScissor` clips drawing to the game area, so nothing spills into the black bars. (Scissor coordinates are in real window pixels, which is why it uses the scaled numbers.)
+- `love.resize` is called whenever the window changes size, including going fullscreen with F11.
+- `math.min(dt, 1 / 30)` caps `dt`. If the window is dragged or the computer hiccups, one frame could take half a second. Without the cap, everything would jump a long way at once and bullets could pass straight through asteroids.
+
+### The game as a module
+
+`main.lua` does `local Game = require "src.game"`. The file `src/game.lua` builds a table called `Game`, puts a few public functions on it (`Game.load`, `Game.update`, `Game.draw`, `Game.keypressed`) and returns it at the end. **Everything else in the file is `local`**, so it's private to the module and can't clash with anything elsewhere.
+
+### One table for all the state
+
+Instead of a dozen loose variables (`score`, `lives`, `bullets`, …), all changing game state lives in a single table, `S`:
+
+```lua
+local S = {} -- all mutable game state
+-- S.mode, S.score, S.lives, S.wave, S.ship, S.asteroids, S.bullets, ...
+```
+
+Resetting the game means resetting one table, and any function can see the state without long argument lists.
+
+### Screens as modes
+
+`S.mode` is `"title"`, `"play"` or `"gameover"`. `Game.update` and `Game.draw` check it and do different things, and a few small functions switch between modes:
+
+<div class="codefile">src/game.lua <span>10-structure</span></div>
+
+```lua
+local function resetState()
+    S.asteroids, S.bullets, S.popups = {}, {}, {}
+    S.banner, S.waveDelay = nil, nil
+    S.modeTime = 0
+end
+
+local function enterTitle()
+    resetState()
+    S.mode = "title"
+    S.wave = 1
+    S.ship = nil
+    for _ = 1, 7 do
+        S.asteroids[#S.asteroids + 1] = newAsteroid(rnd(1, 3), rnd() * W, rnd() * H)
+    end
+end
+
+local function startGame()
+    resetState()
+    S.mode = "play"
+    S.score, S.lives, S.wave = 0, START_LIVES, 1
+    S.nextLife = EXTRA_LIFE_EVERY
+    S.ship = newShip()
+    S.respawnTimer = 0
+    spawnWave()
+end
+
+local function enterGameOver()
+    S.mode = "gameover"
+    S.modeTime = 0
+    S.newHigh = S.score > S.high
+    if S.newHigh then
+        S.high = S.score
+        saveHighScore(S.high)
+    end
+end
+```
+
+| In mode | When… | Go to |
+|---|---|---|
+| `title` | Space or Enter is pressed | `play` (`startGame`) |
+| `play` | the last life is lost | `gameover` (`enterGameOver`) |
+| `play` | Esc is pressed | `title` (`enterTitle`) |
+| `gameover` | Space or Enter, after 1.5 seconds | `play` (`startGame`) |
+| `gameover` | Esc is pressed | `title` (`enterTitle`) |
+
+This is called a **state machine**: a set of states, and clear rules for moving between them. The title screen keeps asteroids drifting behind the text (the arcade **attract mode**) by running only `moveAsteroids` when not playing.
+
+Input is handled per mode too:
+
+<div class="codefile">src/game.lua <span>10-structure</span></div>
+
+```lua
+function Game.keypressed(key, isrepeat)
+    if isrepeat then return end
+
+    if S.mode == "title" then
+        if key == "space" or key == "return" or key == "kpenter" then
+            startGame()
+        elseif key == "escape" then
+            love.event.quit()
+        end
+    elseif S.mode == "gameover" then
+        if S.modeTime > 1.5 and (key == "space" or key == "return" or key == "kpenter") then
+            startGame()
+        elseif key == "escape" then
+            enterTitle()
+        end
+    elseif key == "escape" then
+        enterTitle()
+    end
+end
+```
+
+### Hold to fire
+
+Modern players expect to hold the fire button. The ship now has a `fireTimer`. `updateShip` counts it down and fires whenever the button is held and the timer has run out:
+
+```lua
+s.fireTimer = s.fireTimer - dt
+if firing and s.fireTimer <= 0 then fire() end   -- fire() resets fireTimer to 0.14
+```
+
+### Reusing tables
+
+`transform` now takes an `out` table to write into, instead of creating a new table every call:
+
+<div class="codefile">src/game.lua <span>10-structure</span></div>
+
+```lua
+-- Rotate + translate a flat local shape into `out` (world space).
+local function transform(shape, x, y, angle, out, scale)
+    scale = scale or 1
+    local c, s = math.cos(angle) * scale, math.sin(angle) * scale
+    for i = 1, #shape, 2 do
+        local px, py = shape[i], shape[i + 1]
+        out[i] = x + px * c - py * s
+        out[i + 1] = y + px * s + py * c
+    end
+    return out
+end
+```
+
+Each asteroid keeps its own `pts` table and the ship keeps `s.pts`. Creating thousands of small tables every second makes Lua's **garbage collector** work hard to clean them up, which can cause tiny stutters. Reusing tables avoids that. The optional `scale` argument lets the HUD draw small ships for the lives counter.
+
+### Saving the high score
+
+<div class="codefile">src/game.lua <span>10-structure</span></div>
+
+```lua
+local function loadHighScore()
+    local ok, data = pcall(love.filesystem.read, "highscore.txt")
+    return ok and tonumber(data) or 0
+end
+
+local function saveHighScore(score)
+    pcall(love.filesystem.write, "highscore.txt", tostring(score))
+end
+```
+
+`love.filesystem.write` saves into the game's **save folder**, named by `t.identity` in `conf.lua`:
+
+| System | Save folder |
+|---|---|
+| Windows | `%APPDATA%\LOVE\neon-asteroids` |
+| macOS | `~/Library/Application Support/LOVE/neon-asteroids` |
+| Linux | `~/.local/share/love/neon-asteroids` |
+
+**`pcall`** ("protected call") runs a function and catches any error instead of crashing. `pcall(f, a, b)` returns `true` plus `f`'s results if it worked, or `false` plus the error message if it didn't. A missing or unreadable save file should never crash the game, so we fall back to 0.
+
+### Score pop-ups and banners
+
+Two small touches make the game read better. Points float up from each destroyed asteroid (`popup`), and a big **"WAVE 2"** banner fades in and out (`S.banner`). Both are tables with a timer that `Game.update` counts down, and `drawPopups` and `drawBanner` fade them out by using the remaining time as alpha. Text is drawn through a small `drawText` helper, so Chapter 17 can swap in a glowing font by changing one function.
+
+![The restructured game in a 1280 × 720 window](images/ch10.png)
+
+> **Try it:** Resize the window and press F11. The game always stays in proportion. Then find the `ASTEROID` table in `src/game.lua` and try doubling every `speedHi`.
+
+<div class="part">Part 4 · Making it glow</div>
+
+## 11. Neon lines
+
+Now the fun begins. Real neon, and old vector arcade screens, have a **bright, almost white core** surrounded by a **soft coloured halo**. We fake that by drawing every line three times:
+
+1. a **wide, faint** line: the outer halo
+2. a **medium, brighter** line: the glow
+3. a **thin, bright** line pushed toward white: the hot core
+
+### Additive blending
+
+Normally, drawing a colour *covers* what's underneath (**alpha blending**). Neon needs **additive blending**, where colours *add*: red on top of blue gives magenta, and overlapping glows get brighter, just like light:
+
+```lua
+love.graphics.setBlendMode("add")    -- colours add up, like light
+love.graphics.setBlendMode("alpha")  -- the normal "paint over" mode
+```
+
+With additive blending, drawing black does nothing (adding zero), and three faint overlapping passes become one bright line. It's the single most important trick behind "glowing" game graphics.
+
+### The Neon module
+
+Create `src/neon.lua`:
+
+<div class="codefile">src/neon.lua <span>11-neon</span></div>
+
+```lua
+--[[ neon.lua — glowing vector strokes.
+
+Every shape is drawn three times with additive blending: a wide faint halo,
+a medium glow, and a thin core pushed toward white. (Chapter 14 adds a
+bloom pass that spreads the light further.)
+
+Call with the blend mode already set to "add".
+]]
+
+local Neon = {}
+local lg = love.graphics
+
+local HALO_WIDTH, HALO_ALPHA = 3.4, 0.10
+local GLOW_WIDTH, GLOW_ALPHA = 1.8, 0.32
+local CORE_WHITE = 0.5 -- how far the core line is pushed toward white
+
+local function stroke(points, closed)
+    if closed then
+        lg.polygon("line", points)
+    else
+        lg.line(points)
+    end
+end
+
+-- points: flat {x1, y1, x2, y2, ...}; closed draws it as a polygon outline.
+function Neon.lines(points, r, g, b, a, width, closed)
+    a, width = a or 1, width or 2
+    lg.setLineWidth(width * HALO_WIDTH)
+    lg.setColor(r, g, b, a * HALO_ALPHA)
+    stroke(points, closed)
+    lg.setLineWidth(width * GLOW_WIDTH)
+    lg.setColor(r, g, b, a * GLOW_ALPHA)
+    stroke(points, closed)
+    lg.setLineWidth(width)
+    lg.setColor(r + (1 - r) * CORE_WHITE, g + (1 - g) * CORE_WHITE, b + (1 - b) * CORE_WHITE, a)
+    stroke(points, closed)
+end
+
+function Neon.circle(x, y, radius, r, g, b, a, width, segments)
+    a, width, segments = a or 1, width or 2, segments or 64
+    lg.setLineWidth(width * HALO_WIDTH)
+    lg.setColor(r, g, b, a * HALO_ALPHA)
+    lg.circle("line", x, y, radius, segments)
+    lg.setLineWidth(width * GLOW_WIDTH)
+    lg.setColor(r, g, b, a * GLOW_ALPHA)
+    lg.circle("line", x, y, radius, segments)
+    lg.setLineWidth(width)
+    lg.setColor(r + (1 - r) * CORE_WHITE, g + (1 - g) * CORE_WHITE, b + (1 - b) * CORE_WHITE, a)
+    lg.circle("line", x, y, radius, segments)
+end
+
+function Neon.dot(x, y, radius, r, g, b, a)
+    a = a or 1
+    lg.setColor(r, g, b, a * 0.18)
+    lg.circle("fill", x, y, radius * 2.6)
+    lg.setColor(r + (1 - r) * CORE_WHITE, g + (1 - g) * CORE_WHITE, b + (1 - b) * CORE_WHITE, a)
+    lg.circle("fill", x, y, radius)
+end
+
+return Neon
+```
+
+`Neon.lines` takes a flat point list, a colour, an alpha, a width, and whether the shape is closed. The core colour `r + (1 - r) * CORE_WHITE` moves each channel halfway toward 1, so a pure blue core becomes a pale blue.
+
+### Colours by wave: HSV
+
+Picking pleasing neon colours by mixing red, green and blue is fiddly. **HSV** describes a colour as **hue** (where it is on the colour wheel, 0 to 1), **saturation** (how vivid), and **value** (how bright). Walk the hue around the wheel and you get a rainbow of equally bright colours. The game gives each wave its own hue:
+
+```lua
+local WAVE_HUES = { 0.88, 0.07, 0.76, 0.14, 0.97, 0.30, 0.62 }
+--                  pink  orange violet amber rose  green  blue
+```
+
+<div class="codefile">src/game.lua <span>11-neon</span></div>
+
+```lua
+local function hsv(h, s, v)
+    h = (h % 1) * 6
+    local i = math.floor(h)
+    local f = h - i
+    local p, q, t = v * (1 - s), v * (1 - s * f), v * (1 - s * (1 - f))
+    if i == 0 then return v, t, p
+    elseif i == 1 then return q, v, p
+    elseif i == 2 then return p, v, t
+    elseif i == 3 then return p, q, v
+    elseif i == 4 then return t, p, v
+    end
+    return v, p, q
+end
+```
+
+`newAsteroid` now picks its colour with `hsv(S.hue + ..., 0.78, 1)`, nudging the hue for each size so a wave has a family of related colours.
+
+### Drawing with Neon
+
+In `src/game.lua`, add `local Neon = require "src.neon"` at the top, then switch the draw functions over:
+
+<div class="codefile">src/game.lua <span>11-neon</span></div>
+
+```lua
+local function drawAsteroid(a)
+    Neon.lines(a.pts, a.r, a.g, a.b, 1, 2, true)
+end
+
+local flame = {}
+local function drawShip(s)
+    local c = SHIP_COLOR
+    if s.invuln > 0 then
+        local pulse = 0.5 + 0.5 * math.sin(S.time * 12)
+        Neon.circle(s.x, s.y, 27 + pulse * 2, c[1], c[2], c[3], 0.25 + 0.25 * pulse, 1.4, 48)
+    end
+    Neon.lines(s.pts, c[1], c[2], c[3], 1, 2.2, true)
+    if s.thrusting then
+        local len = 10 + rnd() * 14
+        transform({ -9, -5, -9 - len, 0, -9, 5 }, s.x, s.y, s.angle, flame)
+        Neon.lines(flame, 1, 0.45, 0.25, 0.9, 1.8, false)
+    end
+end
+
+local function drawBullet(b)
+    local c = BULLET_COLOR
+    Neon.lines({ b.x, b.y, b.x - b.vx * 0.022, b.y - b.vy * 0.022 }, c[1], c[2], c[3], 1, 2, false)
+    Neon.dot(b.x, b.y, 1.8, c[1], c[2], c[3], 1)
+end
+```
+
+And at the start of `Game.draw`, after painting the background, switch to additive blending and smooth, bevelled line joins:
+
+```lua
+lg.setBlendMode("add")
+lg.setLineStyle("smooth")
+lg.setLineJoin("bevel")
+```
+
+Switch back with `lg.setBlendMode("alpha")` at the end of `Game.draw`. (`lg` is a local shortcut for `love.graphics` at the top of `game.lua`.)
+
+![Three-pass neon lines](images/ch11.png)
+
+It's subtler than you might expect. The lines look *cleaner* and slightly soft, but they don't really *glow* yet. That's Chapter 14's job. Each of these steps builds on the others.
+
+> **Try it:** Change `HALO_WIDTH` to 8 and `HALO_ALPHA` to 0.25 to see what the halo pass does on its own. Then set `CORE_WHITE` to 0 and then 1 to see the core's effect.
+
+## 12. Particles
+
+Nothing sells an explosion like a shower of sparks. A **particle** is a tiny short-lived object with a position, velocity and lifetime. A **particle system** is just a list of them that you update and draw every frame. You already built one: the bullets!
+
+The game uses four kinds:
+
+| Kind | Looks like | Used for |
+|---|---|---|
+| **spark** | a streak along its velocity, starting white-hot and cooling to its colour | explosions, engine exhaust, muzzle flash |
+| **debris** | one edge of a destroyed shape, tumbling away | asteroid, ship and saucer wreckage |
+| **ring** | an expanding circle that thins and fades | shockwaves |
+| **flash** | a soft glowing blob that swells and fades | the bright moment of detonation |
+
+Create `src/fx.lua`:
+
+<div class="codefile">src/fx.lua <span>12-particles</span></div>
+
+```lua
+--[[ fx.lua — particles.
+
+Particle kinds:
+  spark   a streak drawn along its velocity; starts white-hot, cools to its color
+  debris  one line segment of a destroyed shape, tumbling away
+  ring    an expanding shockwave circle
+  flash   a bright filled blob that swells and fades
+]]
+
+local Fx = {}
+local lg = love.graphics
+local rnd = love.math.random
+local TAU = math.pi * 2
+
+local SPARK, DEBRIS, RING, FLASH = 1, 2, 3, 4
+local MAX_PARTICLES = 5000
+
+
+local particles = {}
+
+-- Soft radial falloff sprite used for explosion flashes.
+local glowImage
+local GLOW_SIZE = 128
+local function getGlowImage()
+    if not glowImage then
+        local half = GLOW_SIZE / 2
+        local data = love.image.newImageData(GLOW_SIZE, GLOW_SIZE)
+        data:mapPixel(function(x, y)
+            local dx, dy = (x + 0.5 - half) / half, (y + 0.5 - half) / half
+            local d = math.min(1, math.sqrt(dx * dx + dy * dy))
+            return 1, 1, 1, (1 - d) ^ 2.5
+        end)
+        glowImage = lg.newImage(data)
+        glowImage:setFilter("linear", "linear")
+    end
+    return glowImage
+end
+
+function Fx.reset()
+    particles = {}
+end
+
+function Fx.count()
+    return #particles
+end
+
+local function add(p)
+    if #particles < MAX_PARTICLES then
+        particles[#particles + 1] = p
+    end
+end
+
+-- ============================================================
+-- EMITTERS
+-- ============================================================
+function Fx.spark(x, y, vx, vy, life, r, g, b, width, drag)
+    add({ kind = SPARK, x = x, y = y, vx = vx, vy = vy, life = life, max = life,
+        r = r, g = g, b = b, w = width or 1.6, drag = drag or 2.2 })
+end
+
+function Fx.burst(x, y, count, speedLo, speedHi, lifeLo, lifeHi, r, g, b, baseVx, baseVy)
+    baseVx, baseVy = baseVx or 0, baseVy or 0
+    for _ = 1, count do
+        local ang = rnd() * TAU
+        local c, s = math.cos(ang), math.sin(ang)
+        local speed = speedLo + rnd() * (speedHi - speedLo)
+        local offset = rnd() * 8 -- scatter the origin so dense bursts don't clip to a flat white dot
+        Fx.spark(x + c * offset, y + s * offset, c * speed + baseVx, s * speed + baseVy,
+            lifeLo + rnd() * (lifeHi - lifeLo), r, g, b)
+    end
+end
+
+-- Sparks that rush inward and meet at (x, y) after `duration` seconds.
+function Fx.implode(x, y, radius, count, duration, r, g, b)
+    for _ = 1, count do
+        local ang = rnd() * TAU
+        local dist = radius * (0.6 + rnd() * 0.4)
+        local c, s = math.cos(ang), math.sin(ang)
+        local speed = dist / duration
+        Fx.spark(x + c * dist, y + s * dist, -c * speed, -s * speed, duration, r, g, b, 1.6, 0)
+    end
+end
+
+function Fx.ring(x, y, radius, duration, r, g, b, width)
+    add({ kind = RING, x = x, y = y, radius = radius, life = duration, max = duration,
+        r = r, g = g, b = b, w = width or 3 })
+end
+
+function Fx.glowFlash(x, y, radius, duration, r, g, b)
+    add({ kind = FLASH, x = x, y = y, radius = radius, life = duration, max = duration, r = r, g = g, b = b })
+end
+
+-- Break a closed polygon (flat world-space points) into tumbling line segments.
+function Fx.debris(points, cx, cy, vx, vy, speed, life, r, g, b)
+    local n = #points
+    for i = 1, n - 1, 2 do
+        local j = (i + 2 > n) and 1 or i + 2
+        local x1, y1, x2, y2 = points[i], points[i + 1], points[j], points[j + 1]
+        local mx, my = (x1 + x2) / 2, (y1 + y2) / 2
+        local dx, dy = mx - cx, my - cy
+        local d = math.sqrt(dx * dx + dy * dy)
+        if d < 0.001 then dx, dy, d = 1, 0, 1 end
+        local sp = speed * (0.5 + rnd())
+        local l = life * (0.6 + rnd() * 0.5)
+        add({ kind = DEBRIS, x = mx, y = my,
+            ax = x1 - mx, ay = y1 - my, bx = x2 - mx, by = y2 - my,
+            vx = vx + dx / d * sp + (rnd() - 0.5) * speed * 0.5,
+            vy = vy + dy / d * sp + (rnd() - 0.5) * speed * 0.5,
+            angle = 0, spin = (rnd() - 0.5) * 9,
+            life = l, max = l, r = r, g = g, b = b, drag = 0.7 })
+    end
+end
+
+-- A complete explosion; scale ~1 (small) to ~5 (huge).
+function Fx.explosion(x, y, scale, r, g, b, vx, vy)
+    vx, vy = (vx or 0) * 0.3, (vy or 0) * 0.3
+    Fx.glowFlash(x, y, 26 * scale, 0.22 + 0.05 * scale, 0.5 + r * 0.5, 0.5 + g * 0.5, 0.5 + b * 0.5)
+    Fx.ring(x, y, 42 * scale, 0.35 + 0.08 * scale, r, g, b, 1.5 + scale * 0.6)
+    Fx.burst(x, y, math.floor(16 * scale), 50, 170 + 80 * scale, 0.35, 0.7 + 0.18 * scale, r, g, b, vx, vy)
+    Fx.burst(x, y, math.floor(5 * scale), 120, 260 + 70 * scale, 0.12, 0.4, 1, 0.95, 0.8, vx, vy)
+end
+
+
+-- ============================================================
+-- UPDATE
+-- ============================================================
+function Fx.update(dt)
+    for i = #particles, 1, -1 do
+        local p = particles[i]
+        p.life = p.life - dt
+        if p.life <= 0 then
+            -- swap-remove: order doesn't matter and this stays O(1)
+            particles[i] = particles[#particles]
+            particles[#particles] = nil
+        elseif p.kind == SPARK or p.kind == DEBRIS then
+            local f = math.exp(-p.drag * dt)
+            p.vx, p.vy = p.vx * f, p.vy * f
+            p.x = p.x + p.vx * dt
+            p.y = p.y + p.vy * dt
+            if p.kind == DEBRIS then p.angle = p.angle + p.spin * dt end
+        end
+    end
+end
+
+
+-- ============================================================
+-- DRAW (additive blending)
+-- ============================================================
+function Fx.draw()
+    for _, p in ipairs(particles) do
+        local t = p.life / p.max
+        if p.kind == SPARK then
+            local hot = t * t * t
+            -- the streak can't be longer than the path the spark has actually travelled
+            local tail = math.min(0.04, p.max - p.life) + 0.004
+            lg.setLineWidth(p.w)
+            lg.setColor(p.r + (1 - p.r) * hot, p.g + (1 - p.g) * hot, p.b + (1 - p.b) * hot, t)
+            lg.line(p.x, p.y, p.x - p.vx * tail, p.y - p.vy * tail)
+        elseif p.kind == DEBRIS then
+            local c, s = math.cos(p.angle), math.sin(p.angle)
+            local x1, y1 = p.x + p.ax * c - p.ay * s, p.y + p.ax * s + p.ay * c
+            local x2, y2 = p.x + p.bx * c - p.by * s, p.y + p.bx * s + p.by * c
+            lg.setLineWidth(5)
+            lg.setColor(p.r, p.g, p.b, t * 0.25)
+            lg.line(x1, y1, x2, y2)
+            lg.setLineWidth(1.8)
+            lg.setColor(0.5 + p.r * 0.5, 0.5 + p.g * 0.5, 0.5 + p.b * 0.5, t)
+            lg.line(x1, y1, x2, y2)
+        elseif p.kind == RING then
+            local k = 1 - t
+            local ease = 1 - (1 - k) * (1 - k) * (1 - k)
+            lg.setLineWidth(p.w * t + 0.5)
+            lg.setColor(p.r, p.g, p.b, t * 0.9)
+            lg.circle("line", p.x, p.y, p.radius * ease, 64)
+        elseif p.kind == FLASH then
+            local img = getGlowImage()
+            local scale = p.radius * (1.6 - 0.6 * t) / (GLOW_SIZE / 2)
+            -- kept dim so Chapter 14's bloom pass doesn't blow it out to white
+            lg.setColor(p.r, p.g, p.b, t * t * 0.2)
+            lg.draw(img, p.x, p.y, 0, scale, scale, GLOW_SIZE / 2, GLOW_SIZE / 2)
+        end
+    end
+end
+
+return Fx
+```
+
+The ideas worth studying:
+
+- **One list, many kinds.** Every particle is a table with a `kind` field. `Fx.update` and `Fx.draw` check it. (More advanced engines keep one list per kind for speed, but a few thousand particles is no problem for LuaJIT.)
+- **Swap-remove.** Particles don't need to stay in order, so a dead one is removed by moving the *last* particle into its slot. `table.remove` would shift every later element, which is slow with thousands of particles.
+- **Life as a fraction.** `t = p.life / p.max` goes from 1 (just born) to 0 (about to die). Nearly every visual uses it. Alpha fades with `t`, and sparks start **white-hot** (`hot = t * t * t`) and cool to their colour.
+- **Easing.** Rings grow with `1 - (1 - k)³`, which moves fast at first and then slows, like a real shockwave losing energy.
+- **Debris from any shape.** `Fx.debris` takes a polygon, the same point list used to draw it, and turns each edge into a tumbling line that flies away from the centre. The wreckage is literally the thing that was destroyed.
+- **The flash sprite** is a small image generated in code. `love.image.newImageData` creates a blank image and `mapPixel` sets every pixel's colour from a function, in this case a soft radial falloff.
+- **A particle cap** (`MAX_PARTICLES`) stops a huge chain reaction from slowing the game to a crawl.
+
+### Hooking particles into the game
+
+`Fx.explosion(x, y, scale, r, g, b, vx, vy)` bundles a flash, a ring and two bursts of sparks into one call. `destroyAsteroid` uses it, sized by a new `fx` field in the `ASTEROID` table (3.2 for large, 1.2 for small), plus debris from the asteroid's own outline:
+
+<div class="codefile">src/game.lua <span>12-particles</span></div>
+
+```lua
+local function destroyAsteroid(i, scored, split, hitVx, hitVy)
+    local a = table.remove(S.asteroids, i)
+    local def = ASTEROID[a.size]
+    if scored then addScore(def.score, a.x, a.y, a.r, a.g, a.b) end
+
+    Fx.explosion(a.x, a.y, def.fx, a.r, a.g, a.b, a.vx, a.vy)
+    Fx.debris(asteroidPoints(a), a.x, a.y, a.vx * 0.5, a.vy * 0.5, 40 + 20 * a.size, 1.0 + 0.3 * a.size, a.r, a.g, a.b)
+
+    if split and a.size > 1 then
+        for _ = 1, 2 do
+            local child = newAsteroid(a.size - 1,
+                a.x + (rnd() - 0.5) * a.radius * 0.6,
+                a.y + (rnd() - 0.5) * a.radius * 0.6)
+            child.vx = child.vx + a.vx * 0.5 + (hitVx or 0) * 0.04
+            child.vy = child.vy + a.vy * 0.5 + (hitVy or 0) * 0.04
+            S.asteroids[#S.asteroids + 1] = child
+        end
+    end
+end
+```
+
+The ship's death is the biggest effect in the game:
+
+<div class="codefile">src/game.lua <span>12-particles</span></div>
+
+```lua
+local function killShip()
+    local s = S.ship
+    s.alive = false
+
+    local c = SHIP_COLOR
+    Fx.debris(shipPoints(s), s.x, s.y, s.vx * 0.4, s.vy * 0.4, 70, 2.4, c[1], c[2], c[3])
+    Fx.explosion(s.x, s.y, 4.5, c[1], c[2], c[3], s.vx, s.vy)
+    Fx.burst(s.x, s.y, 60, 150, 560, 0.4, 1.4, 1, 0.55, 0.2) -- orange fireball
+    Fx.ring(s.x, s.y, 280, 1.0, 1, 1, 1, 4)
+    Fx.ring(s.x, s.y, 180, 0.8, c[1], c[2], c[3], 3)
+    Fx.glowFlash(s.x, s.y, 160, 0.5, 1, 0.55, 0.25)
+
+    S.lives = S.lives - 1
+    S.respawnTimer = RESPAWN_DELAY
+end
+```
+
+A few smaller additions: thrust spawns three orange sparks per frame out of the back of the ship, firing makes a tiny muzzle burst, a respawning ship "materialises" with `Fx.implode` (sparks rushing *inward*), and `Game.update`/`Game.draw` call `Fx.update(dt)` and `Fx.draw()`. The title screen now blows up an asteroid every couple of seconds, which gives the attract mode something to show off:
+
+<div class="codefile">src/game.lua <span>12-particles</span></div>
+
+```lua
+local function updateAttract(dt)
+    moveAsteroids(dt)
+    if S.mode ~= "title" then return end
+    S.attractTimer = S.attractTimer - dt
+    if S.attractTimer <= 0 and #S.asteroids > 0 then
+        S.attractTimer = 1.5 + rnd() * 2
+        destroyAsteroid(rnd(#S.asteroids), false, #S.asteroids < 12)
+    end
+    if #S.asteroids < 6 then
+        S.asteroids[#S.asteroids + 1] = newAsteroid(3, rnd() < 0.5 and 0 or W / 2, rnd() * H)
+    end
+end
+```
+
+![Sparks, debris and shockwave rings](images/ch12.png)
+
+> **Try it:** In `Fx.explosion`, multiply the spark counts by 3. Then try making sparks fall under gravity: in `Fx.update`, add `p.vy = p.vy + 200 * dt` for sparks only.
+
+## 13. Screen shake, hitstop and slow motion
+
+Three techniques that make big moments *hit*.
+
+### Screen shake with "trauma"
+
+Shaking the camera randomly each frame looks jittery and cheap. A much better approach, popularised by game developer Squirrel Eiserloh, uses **trauma**:
+
+- Events **add trauma**, a number from 0 to 1. A large asteroid adds 0.3, the ship exploding adds 0.8.
+- Trauma **decays** steadily over time.
+- The visible shake is **trauma squared**. Small amounts give almost no shake, and big amounts give a lot. It feels natural, and several small hits add up to a big shake.
+- The offset comes from **smooth noise**, not random numbers. `love.math.noise(t)` gives a value that changes *smoothly* as `t` increases, so the camera sways and rattles instead of teleporting around.
+
+<div class="codefile">src/fx.lua <span>13-shake</span></div>
+
+```lua
+local SHAKE_OFFSET = 26 -- px at full trauma
+local SHAKE_ANGLE = 0.03 -- radians at full trauma
+local SHAKE_FREQ = 22
+local TRAUMA_DECAY = 0.85 -- per second
+```
+
+<div class="codefile">src/fx.lua <span>13-shake</span></div>
+
+```lua
+function Fx.shake(amount)
+    Fx.trauma = math.min(1, Fx.trauma + amount)
+end
+```
+
+<div class="codefile">src/fx.lua <span>13-shake</span></div>
+
+```lua
+-- Runs on real (unscaled) time so shake keeps moving during slow motion.
+function Fx.updateShake(dt)
+    Fx.time = Fx.time + dt
+    Fx.trauma = math.max(0, Fx.trauma - TRAUMA_DECAY * dt)
+    local s = Fx.trauma * Fx.trauma
+    local t = Fx.time * SHAKE_FREQ
+    Fx.shakeX = SHAKE_OFFSET * s * (love.math.noise(t, 11.3) * 2 - 1)
+    Fx.shakeY = SHAKE_OFFSET * s * (love.math.noise(t, 47.9) * 2 - 1)
+    Fx.shakeAngle = SHAKE_ANGLE * s * (love.math.noise(t, 83.1) * 2 - 1)
+end
+```
+
+The three different second numbers in `noise(t, 11.3)`, `noise(t, 47.9)` and `noise(t, 83.1)` read three unrelated slices of the noise, so x, y and rotation don't move in step.
+
+**Shake is reserved for big events.** Small and medium asteroids add none. If *everything* shakes the screen, nothing feels big, and the constant motion gets tiring. The `ASTEROID` table gets a `shake` field: 0.3 for large, 0 for the others.
+
+Applying the shake is one transform around the screen centre, at the start of the world drawing in `Game.draw`. The HUD is drawn *after* the matching `lg.pop()`, so the score stays still:
+
+```lua
+lg.push()
+lg.translate(W / 2 + Fx.shakeX, H / 2 + Fx.shakeY)
+lg.rotate(Fx.shakeAngle)
+lg.translate(-W / 2, -H / 2)
+-- ... draw particles, asteroids, bullets, ship ...
+lg.pop()
+```
+
+(Rotation happens around the origin, so we move the origin to the screen centre, rotate, and move it back.)
+
+### Hitstop and slow motion
+
+When the ship explodes, the game **freezes for 0.09 seconds** (*hitstop*, a trick from fighting games that makes impacts feel solid), then runs in **slow motion** that speeds back up to normal over 0.9 seconds. Both are done by changing `dt` before the rest of the game sees it:
+
+<div class="codefile">src/game.lua <span>13-shake</span></div>
+
+```lua
+function Game.update(dt)
+    S.time = S.time + dt
+
+    Fx.updateShake(dt)
+
+    if S.hitstop > 0 then
+        S.hitstop = S.hitstop - dt
+        return
+    end
+    if S.slowmo > 0 then
+        S.slowmo = math.max(0, S.slowmo - dt)
+        dt = dt * (1 - 0.7 * S.slowmo / SLOWMO_TIME)
+    end
+
+    S.modeTime = S.modeTime + dt
+    if S.mode == "play" then
+        updatePlay(dt)
+    else
+        updateAttract(dt)
+    end
+
+    Fx.update(dt)
+    for i = #S.popups, 1, -1 do
+        local p = S.popups[i]
+        p.y = p.y - 30 * dt
+        p.life = p.life - dt
+        if p.life <= 0 then table.remove(S.popups, i) end
+    end
+    if S.banner then
+        S.banner.t = S.banner.t + dt
+        if S.banner.t > 2.2 then S.banner = nil end
+    end
+end
+```
+
+Notice `Fx.updateShake(dt)` runs **before** hitstop and slow motion, on real time. The camera keeps shaking during the freeze, which is what makes it feel like an impact rather than a lag spike. Everything after that line, including particles, runs on the slowed `dt`.
+
+`killShip` sets it all off:
+
+```lua
+Fx.shake(0.8)
+S.hitstop = HITSTOP_TIME   -- 0.09
+S.slowmo = SLOWMO_TIME     -- 0.9
+```
+
+`destroyAsteroid` gains a `quiet` parameter. The attract mode passes `true` so the title screen explodes quietly, with no shake (and, from Chapter 15, no sound).
+
+![A large asteroid exploding with the screen mid-shake](images/ch13.png)
+
+> **Try it:** Set `SLOWMO_TIME` to 3 and die on purpose. Then look at what's happening to `dt` during slow motion, and change the `0.7` to make it even slower.
+
+## 14. Bloom with shaders
+
+This is the chapter that makes it *neon*. **Bloom** is the soft glow that spreads out around bright light. The plan:
+
+1. Draw the whole frame into an off-screen image (a **canvas**) instead of the screen.
+2. Make blurred, shrunken copies of it.
+3. Add the blurred copies back on top of the original.
+
+Bright lines get a halo because their light has been smeared outwards. Dark areas stay dark, because blurring black gives black.
+
+### Canvases
+
+A **canvas** is an image you can draw into:
+
+```lua
+local canvas = love.graphics.newCanvas(1280, 720)
+
+love.graphics.setCanvas(canvas)    -- everything now draws into the canvas
+love.graphics.clear(0, 0, 0, 1)
+-- ... draw the game ...
+love.graphics.setCanvas()          -- back to drawing on the screen
+love.graphics.draw(canvas)         -- show the canvas like any image
+```
+
+Two optional settings matter here:
+
+- **`format = "rgba16f"`** stores colours as floating-point numbers, so they can go **above 1**. When additive neon piles up, a normal canvas clips at pure white, but an HDR ("high dynamic range") canvas remembers *how much* brighter than white it was. That makes the glow much more convincing.
+- **`msaa = 4`** turns on anti-aliasing, for smoother lines.
+
+### Shaders in two minutes
+
+A **shader** is a small program that runs on the graphics card, once for **every pixel** being drawn, all in parallel. LÖVE shaders are written in **GLSL**, a C-like language. A "pixel shader" in LÖVE is a function called `effect`:
+
+```glsl
+vec4 effect(vec4 color, Image tex, vec2 uv, vec2 screen_coords) {
+    vec4 pixel = Texel(tex, uv);   // read the image being drawn, at this spot
+    return pixel * color;          // the colour this pixel should become
+}
+```
+
+- `vec2`, `vec3` and `vec4` are groups of 2, 3 or 4 numbers (positions, colours).
+- `uv` is the position in the image, from (0, 0) at one corner to (1, 1) at the other.
+- `Texel(image, uv)` reads a colour from an image.
+- **`extern`** declares an input you set from Lua with `shader:send("name", value)`.
+
+You use a shader by setting it and drawing: `love.graphics.setShader(shader)`, draw something, then `love.graphics.setShader()` to switch it off.
+
+### Blurring fast
+
+A blur averages each pixel with its neighbours. A wide blur reads many neighbours, which gets slow, so we use two tricks:
+
+- **Separable blur:** blurring horizontally and then vertically gives the same result as a 2D blur, for far fewer reads.
+- **Downsampling:** blur a *half-size* copy, then a quarter-size one, then an eighth. Each smaller copy spreads the glow twice as far for the same cost. Adding all three gives a tight halo *and* a wide soft glow.
+
+### The Glow module
+
+Create `src/glow.lua`:
+
+<div class="codefile">src/glow.lua <span>14-glow</span></div>
+
+```lua
+--[[ glow.lua — neon bloom post-processing.
+
+The frame is drawn into an HDR scene canvas. finish() then builds three
+progressively smaller, blurred copies of it (half, quarter, eighth size) and
+composites them back over the scene, so every bright line gets a tight halo
+plus a wide soft glow. The composite pass also adds a little chromatic
+aberration (driven by screen shake), faint scanlines, a vignette and a
+full-screen flash.
+]]
+
+local Glow = {}
+Glow.__index = Glow
+
+-- 9-tap Gaussian using linear sampling (5 texture reads per pass).
+local BLUR_SRC = [[
+extern vec2 direction;
+vec4 effect(vec4 color, Image tex, vec2 uv, vec2 sc) {
+    vec2 o1 = direction * 1.3846153846;
+    vec2 o2 = direction * 3.2307692308;
+    vec4 sum = Texel(tex, uv) * 0.2270270270;
+    sum += Texel(tex, uv + o1) * 0.3162162162;
+    sum += Texel(tex, uv - o1) * 0.3162162162;
+    sum += Texel(tex, uv + o2) * 0.0702702703;
+    sum += Texel(tex, uv - o2) * 0.0702702703;
+    return sum;
+}
+]]
+
+-- First downsample: cap brightness (keeping hue) so a dense pile of additive
+-- sparks blooms into a soft halo rather than a huge flat white disc.
+local PREFILTER_SRC = [[
+extern float ceiling;
+vec4 effect(vec4 color, Image tex, vec2 uv, vec2 sc) {
+    vec3 c = Texel(tex, uv).rgb;
+    float peak = max(c.r, max(c.g, c.b));
+    c *= min(1.0, ceiling / max(peak, 0.0001));
+    return vec4(c, 1.0);
+}
+]]
+
+local BLOOM_CEILING = 1.6
+
+local COMPOSITE_SRC = [[
+extern Image bloom1;
+extern Image bloom2;
+extern Image bloom3;
+extern vec3 strength;
+extern float aberration;
+extern float flash;
+vec4 effect(vec4 color, Image scene, vec2 uv, vec2 sc) {
+    vec2 c = uv - 0.5;
+    vec2 off = c * aberration;
+    vec3 col = vec3(Texel(scene, uv + off).r, Texel(scene, uv).g, Texel(scene, uv - off).b);
+    col += Texel(bloom1, uv).rgb * strength.x;
+    col += Texel(bloom2, uv).rgb * strength.y;
+    col += Texel(bloom3, uv).rgb * strength.z;
+    col += vec3(flash);
+    // over-bright cores burn toward white, like a real neon tube
+    float peak = max(col.r, max(col.g, col.b));
+    col += vec3(max(peak - 1.0, 0.0) * 0.4);
+    col *= 0.965 + 0.035 * sin(sc.y * 3.14159265);
+    float vig = 1.0 - smoothstep(0.4, 0.85, length(c));
+    col *= mix(0.6, 1.0, vig);
+    return vec4(col, 1.0);
+}
+]]
+
+local BLUR_PASSES = 2 -- blur iterations per level; more = wider, softer glow
+
+local function send(shader, name, ...)
+    if shader:hasUniform(name) then shader:send(name, ...) end
+end
+
+function Glow.new(w, h)
+    local self = setmetatable({}, Glow)
+    local formats = love.graphics.getCanvasFormats()
+    self.format = formats.rgba16f and "rgba16f" or "normal"
+    self.msaa = math.min(4, love.graphics.getSystemLimits().canvasmsaa or 0)
+    self.blur = love.graphics.newShader(BLUR_SRC)
+    self.prefilter = love.graphics.newShader(PREFILTER_SRC)
+    self.prefilter:send("ceiling", BLOOM_CEILING)
+    self.composite = love.graphics.newShader(COMPOSITE_SRC)
+    self.strength = { 1.0, 0.9, 0.8 }
+    self:resize(w, h)
+    return self
+end
+
+function Glow:resize(w, h)
+    w, h = math.max(1, math.floor(w)), math.max(1, math.floor(h))
+    self.w, self.h = w, h
+
+    local ok, canvas = pcall(love.graphics.newCanvas, w, h, { format = self.format, msaa = self.msaa })
+    if not ok then
+        canvas = love.graphics.newCanvas(w, h)
+    end
+    self.scene = canvas
+
+    self.levels = {}
+    local lw, lh = w, h
+    for i = 1, 3 do
+        lw, lh = math.max(1, math.floor(lw / 2)), math.max(1, math.floor(lh / 2))
+        local a = love.graphics.newCanvas(lw, lh, { format = self.format })
+        local b = love.graphics.newCanvas(lw, lh, { format = self.format })
+        a:setFilter("linear", "linear")
+        b:setFilter("linear", "linear")
+        self.levels[i] = { a = a, b = b, w = lw, h = lh }
+    end
+end
+
+-- Start drawing the frame into the scene canvas.
+function Glow:begin()
+    love.graphics.setCanvas(self.scene)
+    love.graphics.clear(0, 0, 0, 1)
+end
+
+-- Blur, composite and present the frame to the screen.
+function Glow:finish(aberration, flash)
+    local lg = love.graphics
+    -- Unbind the scene canvas *before* push("all"), otherwise pop() would
+    -- re-activate it and LÖVE can't present the frame.
+    lg.setCanvas()
+    lg.push("all")
+    lg.origin()
+    lg.setColor(1, 1, 1, 1)
+    lg.setBlendMode("replace", "premultiplied")
+
+    local src, sw, sh = self.scene, self.w, self.h
+    for i, level in ipairs(self.levels) do
+        lg.setShader(i == 1 and self.prefilter or nil)
+        lg.setCanvas(level.a)
+        lg.draw(src, 0, 0, 0, level.w / sw, level.h / sh)
+
+        lg.setShader(self.blur)
+        for _ = 1, BLUR_PASSES do
+            self.blur:send("direction", { 1 / level.w, 0 })
+            lg.setCanvas(level.b)
+            lg.draw(level.a)
+            self.blur:send("direction", { 0, 1 / level.h })
+            lg.setCanvas(level.a)
+            lg.draw(level.b)
+        end
+        src, sw, sh = level.a, level.w, level.h
+    end
+
+    lg.setCanvas()
+    lg.setShader(self.composite)
+    send(self.composite, "bloom1", self.levels[1].a)
+    send(self.composite, "bloom2", self.levels[2].a)
+    send(self.composite, "bloom3", self.levels[3].a)
+    send(self.composite, "strength", self.strength)
+    send(self.composite, "aberration", aberration or 0)
+    send(self.composite, "flash", flash or 0)
+    lg.draw(self.scene)
+    lg.pop()
+end
+
+return Glow
+```
+
+Walking through `Glow:finish`:
+
+1. **Unbind the scene canvas first**, then `push("all")` saves *all* graphics state. (There's a story about this line below.)
+2. For each of the three levels, draw the previous image shrunk into canvas `a`. The first time, a **prefilter** caps brightness at 1.6 while keeping the hue. Then blur `a → b` horizontally and `b → a` vertically, twice.
+3. Draw the scene to the screen through the **composite** shader. It adds the three blurred levels, plus four finishing touches:
+   - **chromatic aberration**: red and blue are read slightly apart toward the edges, like a cheap lens
+   - faint **scanlines**, using `sin(screen y)`
+   - a **vignette** darkening the corners
+   - a whole-screen **flash**
+
+`setBlendMode("replace", "premultiplied")` makes each blur pass *overwrite* its target instead of blending into it.
+
+> **Gotcha: the canvas that wouldn't let go.** The first version of `finish` called `push("all")` *while the scene canvas was still active*, then unbound it inside. `pop()` faithfully restored the saved state, *including the active canvas*. LÖVE then tried to show the frame with a canvas still bound, and crashed: `present cannot be called while a Canvas is active`. The fix is the `lg.setCanvas()` before `push("all")`. The lesson: `push("all")`/`pop()` saves and restores **everything**, including things you might not think of as "state".
+
+> **Gotcha: the white disc.** Bloom adds the blurred image back about **three times over** (the strengths 1.0 + 0.9 + 0.8). That's right for thin lines, whose light is spread thin by the blur. But a *big, soft, bright* area, like an explosion's flash sprite, stays bright after blurring, gets roughly tripled, and clips to a flat white disc. That's why the flash sprites in `fx.lua` are drawn at only 20% alpha, and why the prefilter caps brightness. **Tune effects with the bloom on.**
+
+### Plugging it in
+
+`main.lua` creates the glow and wraps the frame in it:
+
+<div class="codefile">main.lua <span>14-glow</span></div>
+
+```lua
+function love.load()
+    love.graphics.setDefaultFilter("linear", "linear")
+    love.mouse.setVisible(false)
+    local w, h = love.graphics.getDimensions()
+    glow = Glow.new(w, h)
+    fitView(w, h)
+    Game.load()
+end
+
+function love.resize(w, h)
+    glow:resize(w, h)
+    fitView(w, h)
+end
+
+function love.update(dt)
+    Game.update(math.min(dt, 1 / 30))
+end
+
+function love.draw()
+    glow:begin()
+    love.graphics.push()
+    love.graphics.translate(view.x, view.y)
+    love.graphics.scale(view.scale)
+    love.graphics.setScissor(view.x, view.y, math.ceil(Game.W * view.scale), math.ceil(Game.H * view.scale))
+    Game.draw()
+    love.graphics.setScissor()
+    love.graphics.pop()
+    glow:finish(Game.aberration(), Game.flash())
+end
+```
+
+`Game.aberration()` and `Game.flash()` let the game drive the post-processing. Aberration grows with shake trauma, so big hits smear the colours, and the flash is a new `Fx.flash` value that decays quickly (`killShip` sets it to 0.25):
+
+<div class="codefile">src/game.lua <span>14-glow</span></div>
+
+```lua
+-- Post-processing parameters for the glow composite.
+function Game.aberration()
+    return 0.0015 + Fx.trauma * Fx.trauma * 0.005
+end
+
+function Game.flash()
+    return Fx.flash * 0.5
+end
+```
+
+![The same game with bloom: now it glows](images/ch14.png)
+
+Compare this screenshot with Chapter 12's. Same game, same lines, but now it *glows*.
+
+> **Try it:** In `glow.lua`, set `self.strength = { 2, 0, 0 }`, then `{ 0, 0, 2 }`, to see the tight halo and the wide glow separately. Set `BLUR_PASSES` to 4 for a dreamy look.
+
+## 15. Sound from scratch
+
+The game has no audio files. Every zap, crunch and wail is **calculated**, sample by sample, when the game starts. It's easier than it sounds, and it's how the 1980s arcade machines that inspired this game made their sounds too.
+
+### What is digital sound?
+
+A speaker makes sound by moving back and forth. Digital audio describes that movement as a long list of numbers called **samples**, each between **−1 and 1** (the speaker's position), played back very quickly. The game uses **44,100 samples per second** (the *sample rate*, the same as a CD).
+
+- **Pitch** is how fast the wave repeats. A wave that goes up and down 440 times a second is the note A. Faster means higher.
+- **Volume** is how big the wave is. Multiplying every sample by 0.5 makes it quieter.
+
+### Waveforms
+
+The simplest waveform to make in code is a **square wave**: +1 for half of each cycle, −1 for the other half. It has the buzzy, electronic sound of old game consoles. To make one, keep a **phase** that counts cycles, adding `frequency / RATE` every sample:
+
+```lua
+phase = phase + frequency / RATE
+local sample = (phase % 1) < 0.5 and 1 or -1   -- first half of each cycle: +1
+```
+
+Because the phase *accumulates*, you can change the frequency on every sample without clicks. That's how **sweeps** work: a laser is just a square wave whose pitch falls quickly.
+
+**Noise** is random numbers: `rng:random() * 2 - 1`. Noise is the basis of every explosion, engine and hiss.
+
+An **envelope** shapes the volume over time. A quick rise (the *attack*) then a fade, often `(1 - progress) ^ 2`, turns a steady buzz into a "pew".
+
+### The Williams explosion
+
+The arcade game *Defender* (Williams Electronics, 1981) had famously crunchy, powerful explosions. The trick is **sample-and-hold noise**: pick a random value and *hold* it for a while before picking the next one. Holding briefly sounds like a hiss, and holding for longer sounds like a low rumble. Sweep the hold rate **downward** as the sound fades, and the explosion "falls" from a crack into a rumble. Add some **bit-crushing** (rounding samples to a few levels, like the old 8-bit sound chips) for grit.
+
+### Turning numbers into sound in LÖVE
+
+```lua
+local data = love.sound.newSoundData(sampleCount, 44100, 16, 1)  -- 16-bit, mono
+data:setSample(i, value)                  -- i counts from 0; value is -1..1
+local source = love.audio.newSource(data, "static")
+source:play()
+```
+
+A **Source** is something that can play. One Source can only play once at a time, so for sounds that overlap (like rapid fire) we make a small **pool** of Sources per effect and use whichever one is free. If they're all busy, the oldest is cut off and reused.
+
+### The Sfx module
+
+Create `src/sfx.lua`. It's long, but each effect is a short recipe, and the file reads from top to bottom: helpers, then effects, then playback.
+
+<div class="codefile">src/sfx.lua <span>15-sound</span></div>
+
+```lua
+--[[ sfx.lua — arcade sound effects synthesized at startup, Williams/Defender style.
+
+No audio files: every effect is computed sample by sample into a SoundData.
+The signature Williams-board explosion is "sample-and-hold" noise: a random
+value is held for a while, then replaced, and the replacement rate sweeps
+downward — so the crunch falls in pitch as it fades. Everything is lightly
+bit-crushed for that 8-bit DAC grit.
+
+    Sfx.load()
+    Sfx.play("fire", pan, pitch, volume)   -- pan -1..1
+    Sfx.loop("thrust", true / false)
+
+Synthesis approach adapted from retro-starfield-starter-kit's src/retro/sfx.lua (MIT).
+]]
+
+local Sfx = { enabled = false, muted = false, volume = 0.8 }
+
+local RATE = 44100
+local TAU = math.pi * 2
+local rng
+
+-- per-effect mix levels
+local LEVEL = {
+    fire = 0.42, thrust = 0.55, beat1 = 0.7, beat2 = 0.7,
+    ufo_big = 0.28, ufo_small = 0.26, ufo_fire = 0.5,
+    boom_small = 0.7, boom_medium = 0.85, boom_large = 1.0,
+    player_die = 1.0, smart_bomb = 1.0,
+}
+
+-- simultaneous voices per effect (older voices are stolen when all are busy)
+local VOICES = { fire = 6, boom_small = 6, boom_medium = 5, boom_large = 5, ufo_fire = 4 }
+local DEFAULT_VOICES = 2
+
+local bank = {}
+local loops = {}
+
+-- ============================================================
+-- SYNTH HELPERS
+-- ============================================================
+local function render(duration, gen)
+    local n = math.floor(RATE * duration)
+    local data = love.sound.newSoundData(n, RATE, 16, 1)
+    for i = 0, n - 1 do
+        local v = gen(i / RATE, i / n)
+        if v > 1 then v = 1 elseif v < -1 then v = -1 end
+        data:setSample(i, v)
+    end
+    return data
+end
+
+local function square(phase, duty)
+    return (phase % 1) < (duty or 0.5) and 1 or -1
+end
+
+local function tri(phase)
+    return 4 * math.abs(phase % 1 - 0.5) - 1
+end
+
+local function crush(v, bits)
+    local levels = 2 ^ (bits - 1)
+    return math.floor(v * levels + 0.5) / levels
+end
+
+local function attack(t, seconds)
+    return math.min(1, t / seconds)
+end
+
+-- Williams sample-and-hold noise: hold rate sweeps from rateHi to rateLo.
+-- rumbleHz/rumble add a falling sine underneath for body.
+local function crunch(duration, rateHi, rateLo, volume, rumbleHz, rumble, curve)
+    local hold, acc, lp, ph = 0, 1, 0, 0
+    return render(duration, function(t, p)
+        local rate = rateHi * (rateLo / rateHi) ^ p
+        acc = acc + rate / RATE
+        if acc >= 1 then
+            acc = acc % 1
+            hold = rng:random() * 2 - 1
+        end
+        lp = lp + (hold - lp) * 0.35
+        local v = lp
+        if rumble then
+            ph = ph + rumbleHz * (1 - 0.5 * p) / RATE
+            v = v + math.sin(ph * TAU) * rumble
+        end
+        local env = attack(t, 0.003) * (1 - p) ^ (curve or 2)
+        return crush(v * env * volume, 6)
+    end)
+end
+
+-- Square-wave notes played back to back, with a touch of vibrato.
+local function notes(freqs, noteLength, volume, vibrato)
+    local ph = 0
+    local total = #freqs * noteLength
+    return render(total, function(t)
+        local idx = math.min(#freqs, math.floor(t / noteLength) + 1)
+        local local_t = t - (idx - 1) * noteLength
+        local f = freqs[idx] * (1 + (vibrato or 0) * math.sin(t * TAU * 7))
+        ph = ph + f / RATE
+        local env = attack(local_t, 0.004) * (1 - local_t / noteLength) ^ 0.6
+        return (square(ph, 0.5) * 0.6 + tri(ph * 2) * 0.4) * env * volume
+    end)
+end
+
+-- ============================================================
+-- EFFECTS
+-- ============================================================
+local function build()
+    local fx = {}
+
+    -- Player laser: a bright falling zap with a sub-octave for body.
+    do
+        local p1, p2 = 0, 0
+        fx.fire = render(0.2, function(t, p)
+            local f = 2400 * math.exp(-t * 16) + 220
+            p1 = p1 + f / RATE
+            p2 = p2 + f * 0.5 / RATE
+            local v = square(p1, 0.5) * 0.55 + square(p2, 0.25) * 0.3
+            return crush(v * attack(t, 0.002) * (1 - p) ^ 1.4 * 0.6, 5)
+        end)
+    end
+
+    fx.boom_small = crunch(0.45, 9000, 700, 0.8, nil, nil, 2.2)
+    fx.boom_medium = crunch(0.85, 7000, 350, 0.85, 70, 0.25, 2.0)
+    fx.boom_large = crunch(1.5, 6000, 120, 0.9, 52, 0.45, 1.8)
+
+    -- Ship destroyed: crunch plus a long falling, warbling wail.
+    do
+        local hold, acc, lp, ph = 0, 1, 0, 0
+        fx.player_die = render(2.4, function(t, p)
+            local rate = 6000 * (80 / 6000) ^ p
+            acc = acc + rate / RATE
+            if acc >= 1 then acc = acc % 1; hold = rng:random() * 2 - 1 end
+            lp = lp + (hold - lp) * 0.35
+            local f = 900 * (1 - p) ^ 2 + 40 + 30 * math.sin(t * TAU * 14) * (1 - p)
+            ph = ph + f / RATE
+            local tone = square(ph, 0.5) * 0.4 * (1 - p)
+            local env = attack(t, 0.003) * (1 - p) ^ 1.5
+            return crush((lp * 0.8 + tone) * env * 0.75, 6)
+        end)
+    end
+
+    -- Smart bomb: a huge white-noise blast collapsing into a deep rumble.
+    fx.smart_bomb = crunch(2.2, 15000, 60, 0.9, 42, 0.6, 1.3)
+
+    -- Engine: doubly low-passed noise, looped.
+    do
+        local lp1, lp2 = 0, 0
+        fx.thrust = render(0.6, function()
+            local n = rng:random() * 2 - 1
+            lp1 = lp1 + (n - lp1) * 0.12
+            lp2 = lp2 + (lp1 - lp2) * 0.12
+            return lp2 * 2.2
+        end)
+    end
+
+    -- Saucer warbles. Whole LFO cycles and a whole number of carrier cycles
+    -- per loop, so the loop point is seamless.
+    local function warble(base, depth, lfo, volume)
+        local ph = 0
+        return render(0.5, function(t)
+            local f = base + depth * math.sin(TAU * lfo * t)
+            ph = ph + f / RATE
+            return square(ph, 0.5) * volume
+        end)
+    end
+    fx.ufo_big = warble(330, 90, 8, 0.5)
+    fx.ufo_small = warble(760, 220, 12, 0.45)
+
+    do
+        local ph = 0
+        fx.ufo_fire = render(0.14, function(t, p)
+            ph = ph + (1500 - 1000 * p) / RATE
+            return tri(ph) * (1 - p) * 0.7
+        end)
+    end
+
+    -- Heartbeat thumps.
+    local function beat(freq)
+        local ph, lp = 0, 0
+        return render(0.16, function(t)
+            ph = ph + freq / RATE
+            lp = lp + (square(ph) - lp) * 0.08
+            return lp * math.exp(-t * 18)
+        end)
+    end
+    fx.beat1 = beat(62)
+    fx.beat2 = beat(55)
+
+    fx.extra_life = notes({ 784, 988, 1175, 1568, 1175, 1568, 2093 }, 0.065, 0.45)
+    fx.game_over = notes({ 523, 440, 349, 262, 196 }, 0.24, 0.45, 0.02)
+
+    -- Hyperspace: a rising, warbling whoop.
+    do
+        local ph = 0
+        fx.hyperspace = render(0.5, function(t, p)
+            local f = 120 + 2600 * p * p
+            f = f * (1 + 0.12 * math.sin(t * TAU * 40))
+            ph = ph + f / RATE
+            return crush(square(ph, 0.3) * attack(t, 0.005) * (1 - p) ^ 0.7 * 0.45, 5)
+        end)
+    end
+
+    -- Materialize: two detuned triangles sweeping up with tremolo.
+    do
+        local p1, p2 = 0, 0
+        fx.warp_in = render(0.6, function(t, p)
+            local f = 200 + 1300 * p
+            p1 = p1 + f / RATE
+            p2 = p2 + f * 1.01 / RATE
+            local trem = 0.6 + 0.4 * math.sin(t * TAU * 30)
+            return (tri(p1) + tri(p2)) * 0.25 * trem * math.sin(math.pi * p)
+        end)
+    end
+
+    -- New wave: three quick upward zips.
+    do
+        local ph = 0
+        fx.wave_start = render(0.42, function(t)
+            local k = (t % 0.14) / 0.14
+            ph = ph + (300 + 1400 * k) / RATE
+            return square(ph, 0.5) * (1 - k) * 0.35
+        end)
+    end
+
+    -- Game start: a launch sweep with a crunchy tail.
+    do
+        local ph, hold, acc = 0, 0, 1
+        fx.start = render(0.9, function(t, p)
+            local f = 150 + 1700 * p
+            f = f * (1 + 0.05 * math.sin(t * TAU * 25))
+            ph = ph + f / RATE
+            acc = acc + 3000 / RATE
+            if acc >= 1 then acc = acc % 1; hold = rng:random() * 2 - 1 end
+            local v = square(ph, 0.5) * 0.45 + hold * 0.25 * p
+            return crush(v * attack(t, 0.01) * (1 - p) ^ 0.5 * 0.6, 5)
+        end)
+    end
+
+    do
+        local ph = 0
+        fx.blip = render(0.07, function(t, p)
+            ph = ph + 880 / RATE
+            return square(ph) * (1 - p) * 0.3
+        end)
+    end
+
+    return fx
+end
+
+-- ============================================================
+-- PLAYBACK
+-- ============================================================
+local function setPan(src, pan)
+    pan = math.max(-1, math.min(1, pan or 0)) * 0.8
+    src:setPosition(pan, 0, -math.sqrt(1 - pan * pan))
+end
+
+function Sfx.load()
+    local ok, err = pcall(function()
+        rng = love.math.newRandomGenerator(1981)
+        love.audio.setDistanceModel("none") -- position only pans, never attenuates
+        for name, data in pairs(build()) do
+            local voices = {}
+            for i = 1, VOICES[name] or DEFAULT_VOICES do
+                voices[i] = love.audio.newSource(data, "static")
+            end
+            bank[name] = { voices = voices, nextVoice = 1 }
+        end
+        love.audio.setVolume(Sfx.volume)
+    end)
+    Sfx.enabled = ok
+    if not ok then print("sound disabled: " .. tostring(err)) end
+end
+
+function Sfx.play(name, pan, pitch, volume)
+    if not Sfx.enabled then return end
+    local entry = bank[name]
+    if not entry then return end
+
+    local voice
+    for _, v in ipairs(entry.voices) do
+        if not v:isPlaying() then voice = v; break end
+    end
+    if not voice then
+        voice = entry.voices[entry.nextVoice]
+        entry.nextVoice = entry.nextVoice % #entry.voices + 1
+        voice:stop()
+    end
+    voice:setPitch(pitch or 1)
+    voice:setVolume((volume or 1) * (LEVEL[name] or 1))
+    setPan(voice, pan)
+    voice:play()
+end
+
+function Sfx.loop(name, on)
+    if not Sfx.enabled then return end
+    local src = loops[name]
+    if on then
+        if not src then
+            local entry = bank[name]
+            if not entry then return end
+            src = entry.voices[1]:clone()
+            src:setLooping(true)
+            src:setVolume(LEVEL[name] or 1)
+            setPan(src, 0)
+            loops[name] = src
+        end
+        if not src:isPlaying() then src:play() end
+    elseif src and src:isPlaying() then
+        src:stop()
+    end
+end
+
+function Sfx.setLoopPan(name, pan)
+    if loops[name] then setPan(loops[name], pan) end
+end
+
+function Sfx.stopLoops()
+    for _, src in pairs(loops) do src:stop() end
+end
+
+function Sfx.toggleMute()
+    Sfx.muted = not Sfx.muted
+    love.audio.setVolume(Sfx.muted and 0 or Sfx.volume)
+end
+
+return Sfx
+```
+
+A few details worth pointing out:
+
+- **Seamless loops.** The engine hum and saucer warbles loop forever. A loop clicks if the wave doesn't end where it began. `warble` uses a whole number of wobble (LFO) cycles and a whole number of tone cycles in its 0.5 seconds, so the end joins the start perfectly.
+- **Stereo panning.** Every sound is placed left or right by where it happens on screen. `setPosition` puts a Source in 3D space around the listener. Setting the distance model to `"none"` means position only *pans* and never makes sounds quieter. (Positioning only works on **mono** sounds, which is why everything is made with 1 channel.)
+- **Pitch variation.** `Sfx.play("fire", pan, 0.95 + rnd() * 0.1)` plays each shot at a slightly different pitch. It's a tiny change, but hearing the identical sound 200 times is surprisingly tiring.
+- **Failing gracefully.** If audio can't start (no sound device), `pcall` catches the error and `Sfx.enabled` stays false, so every call quietly does nothing.
+
+### Hooking up the sounds
+
+Add `local Sfx = require "src.sfx"` to `game.lua`, call `Sfx.load()` in `Game.load`, and add a helper that turns an x position into a pan value from −1 to 1:
+
+<div class="codefile">src/game.lua <span>15-sound</span></div>
+
+```lua
+local function pan(x)
+    return x / W * 2 - 1
+end
+```
+
+Then play sounds where things happen:
+
+| Where | Call |
+|---|---|
+| `fire` | `Sfx.play("fire", pan(x), 0.95 + rnd() * 0.1)` |
+| `destroyAsteroid` (unless `quiet`) | `Sfx.play(def.sound, pan(a.x), 0.92 + rnd() * 0.16)` with a new `sound` field in `ASTEROID` |
+| `killShip` | `Sfx.loop("thrust", false)` and `Sfx.play("player_die", pan(s.x))` |
+| `updateShip` | `Sfx.loop("thrust", thrust)` starts or stops the engine loop |
+| `startGame`, new wave, respawn | `"start"`, `"wave_start"`, `"warp_in"` |
+| `enterGameOver` | `Sfx.stopLoops()` then `Sfx.play("game_over")` |
+| `addScore`, extra life | `Sfx.play("extra_life")` |
+| `Game.keypressed` | `M` calls `Sfx.toggleMute()` |
+
+Finally, the original Asteroids' unforgettable **heartbeat**: two low thumps that alternate faster and faster the longer a wave lasts. It goes at the end of `updatePlay`:
+
+<div class="codefile">src/game.lua <span>15-sound</span></div>
+
+```lua
+    -- the classic heartbeat, quickening as the wave drags on
+    if S.ship.alive and #S.asteroids > 0 then
+        S.beatTimer = S.beatTimer - dt
+        if S.beatTimer <= 0 then
+            S.beatIndex = 1 - S.beatIndex
+            Sfx.play(S.beatIndex == 0 and "beat1" or "beat2")
+            S.beatTimer = math.max(0.3, 1.0 - S.waveTime * 0.012)
+        end
+    end
+```
+
+The sound bank also builds saucer and smart-bomb sounds that won't be used until Chapter 18.
+
+> **Tip:** Want to hear an effect on its own, or tweak it quickly? Put `Sfx.play("boom_large")` inside `love.keypressed` for a test key, change the numbers in its recipe, and re-run.
+
+> **Try it:** Make the laser more "Star Wars": in the `fire` recipe, change `2400 * math.exp(-t * 16)` to `3500 * math.exp(-t * 30)`. Make explosions longer by changing the `1.5` in `boom_large`.
+
+The game sounds different now, but looks the same as Chapter 14.
+
+## 16. A twinkling starfield
+
+The background comes from the [retro-starfield-starter-kit](https://github.com/pmirvine/retro-starfield-starter-kit), a small MIT-licensed library that recreates the twinkling star field of 1979's *Galaxian*. It even uses the real colours that Galaxian's hardware could produce. Using it shows how to work with **someone else's library**.
+
+### Adding the library
+
+Copy `lib/starfield.lua` from the checkpoint into a `lib` folder in your project (keeping libraries you didn't write separate from `src/` is a good habit) and require it:
+
+```lua
+local Starfield = require "lib.starfield"
+```
+
+A library usually documents itself at the top of the file. Open `lib/starfield.lua` and read the first 40 lines. The author explains how to use it before any code appears.
+
+### Objects with colons
+
+`Starfield.new(...)` returns an **object**: a table with data and methods. You call its methods with a colon, `field:update(dt)`, which (as Chapter 4 explained) is short for `field.update(field, dt)`. The object passes itself along so the method knows which starfield to update.
+
+<div class="codefile">src/game.lua <span>16-starfield</span></div>
+
+```lua
+function Game.load()
+    Sfx.load()
+    field = Starfield.new(W, H, {
+        velocity = { -4, 2 },
+        layers = 3,
+        density = 0.9,
+        background = { 0.012, 0.008, 0.03 },
+    })
+    S.time = 0
+    S.high = loadHighScore()
+    enterTitle()
+end
+```
+
+- `layers = 3` gives three depths of stars. Far layers are dimmer, smaller and move less. That's **parallax**, and it gives a sense of depth.
+- `velocity = { -4, 2 }` makes the whole field drift slowly.
+- `background` fills the space behind the stars with a deep navy.
+
+### How the twinkle works
+
+Each star gets its own blink **period** and **phase** when it's created:
+
+<div class="codefile">lib/starfield.lua <span>16-starfield</span></div>
+
+```lua
+function Starfield:_make_star()
+  local rng = self._rng
+  return {
+    rng:random(),                                                        -- nx: x as a fraction of width
+    rng:random(),                                                        -- ny: y as a fraction of height
+    self._palette[rng:random(#self._palette)],                           -- color
+    TWINKLE_PERIOD_LO + rng:random() * (TWINKLE_PERIOD_HI - TWINKLE_PERIOD_LO), -- blink period (s)
+    rng:random() * TWINKLE_PERIOD_HI,                                    -- blink phase, so stars desync
+  }
+end
+```
+
+and it's drawn only for the first part of each period:
+
+```lua
+if not (twinkling and (t + s[5]) % s[4] > s[4] * TWINKLE_DUTY) then
+    -- draw this star
+end
+```
+
+`(t + phase) % period` counts from 0 up to `period` and starts again. The star is visible while that count is under 55% of the period (`TWINKLE_DUTY`). With every star on a slightly different period and phase, the field shimmers instead of blinking in unison. The library draws all the stars with a **SpriteBatch**, LÖVE's fast way to draw many copies of one image in a single call.
+
+### Plugging it in
+
+Three changes to `game.lua`:
+
+1. `field:update(dt)` in `Game.update`, next to `Fx.updateShake`, so the stars keep twinkling during hitstop.
+2. In `updateShip`, scroll the stars *against* the ship's movement for parallax: `field:scroll(-s.vx * dt * 0.06, -s.vy * dt * 0.06)`.
+3. At the start of `Game.draw`, draw the field and then a translucent rectangle over it, so the stars don't compete with the neon:
+
+```lua
+lg.setBlendMode("alpha")
+field:draw()
+-- dim the stars a touch so the neon stays the star of the show
+lg.setColor(0.012, 0.008, 0.03, 0.3)
+lg.rectangle("fill", 0, 0, W, H)
+```
+
+The stars are drawn *inside* the glow canvas, so the bloom gives each one a faint halo.
+
+![Twinkling Galaxian stars behind the neon](images/ch16.png)
+
+> **Try it:** Change `palette` to `"white"` in the options for a more modern look, or set `twinkle_speed = 0` to stop the twinkling and see how much life it adds.
+
+## 17. A vector font
+
+The game's text still uses LÖVE's standard font, which looks out of place next to the glowing lines. Arcade vector games drew their letters with the same beam that drew the ships, as a few straight strokes each. We'll do the same, and every letter will glow for free.
+
+### Designing glyphs
+
+Each character (a **glyph**) is drawn on a tiny **4 × 6 grid** (x across, y down), as one or more **strokes**, each a list of points:
+
+```
+ A = "0,6 0,2 2,0 4,2 4,6|0,3.5 4,3.5"
+
+     0   1   2   3   4
+  0          ●                 stroke 1: up the left side,
+  1        ╱   ╲                          over the peak,
+  2      ●       ●                        down the right side
+  3.5    ●───────●             stroke 2:  the crossbar
+  6      ●       ●
+```
+
+`|` separates strokes. The whole alphabet is a table of these strings:
+
+<div class="codefile">src/neon.lua <span>17-vector-font</span></div>
+
+```lua
+local GLYPH_SRC = {
+    A = "0,6 0,2 2,0 4,2 4,6|0,3.5 4,3.5",
+    B = "0,0 0,6 3,6 4,5 4,4 3,3 0,3|0,0 3,0 4,1 4,2 3,3",
+    C = "4,0 0,0 0,6 4,6",
+    D = "0,0 0,6 2,6 4,4 4,2 2,0 0,0",
+    E = "4,0 0,0 0,6 4,6|0,3 3,3",
+    F = "4,0 0,0 0,6|0,3 3,3",
+    G = "4,1 4,0 0,0 0,6 4,6 4,3 2,3",
+    H = "0,0 0,6|4,0 4,6|0,3 4,3",
+    I = "0,0 4,0|2,0 2,6|0,6 4,6",
+    J = "4,0 4,5 3,6 1,6 0,5",
+    K = "0,0 0,6|4,0 0,3 4,6",
+    L = "0,0 0,6 4,6",
+    M = "0,6 0,0 2,2 4,0 4,6",
+    N = "0,6 0,0 4,6 4,0",
+    O = "0,0 4,0 4,6 0,6 0,0",
+    P = "0,6 0,0 4,0 4,3 0,3",
+    Q = "0,0 4,0 4,4 2,6 0,6 0,0|2,4 4,6",
+    R = "0,6 0,0 4,0 4,3 0,3|1,3 4,6",
+    S = "4,0 0,0 0,3 4,3 4,6 0,6",
+    T = "0,0 4,0|2,0 2,6",
+    U = "0,0 0,6 4,6 4,0",
+    V = "0,0 2,6 4,0",
+    W = "0,0 0,6 2,4 4,6 4,0",
+    X = "0,0 4,6|4,0 0,6",
+    Y = "0,0 2,3 4,0|2,3 2,6",
+    Z = "0,0 4,0 0,6 4,6",
+    ["0"] = "0,0 4,0 4,6 0,6 0,0|4,0 0,6",
+    ["1"] = "1,1 2,0 2,6|1,6 3,6",
+    ["2"] = "0,0 4,0 4,3 0,3 0,6 4,6",
+    ["3"] = "0,0 4,0 4,6 0,6|1,3 4,3",
+    ["4"] = "0,0 0,3 4,3|4,0 4,6",
+    ["5"] = "4,0 0,0 0,3 4,3 4,6 0,6",
+    ["6"] = "4,0 0,0 0,6 4,6 4,3 0,3",
+    ["7"] = "0,0 4,0 4,6",
+    ["8"] = "0,0 4,0 4,6 0,6 0,0|0,3 4,3",
+    ["9"] = "4,3 0,3 0,0 4,0 4,6 0,6",
+    ["-"] = "1,3 3,3",
+    ["+"] = "2,1.5 2,4.5|0.5,3 3.5,3",
+    ["."] = "1.7,5.6 2.3,6",
+    [","] = "2,5 1,7",
+    [":"] = "2,1.5 2,2.1|2,4.4 2,5",
+    ["!"] = "2,0 2,4|2,5.4 2,6",
+    ["?"] = "0,1 1,0 3,0 4,1 4,2 2,3 2,4|2,5.4 2,6",
+    ["/"] = "4,0 0,6",
+    ["'"] = "2,0 2,1.5",
+    ["("] = "3,0 1,2 1,4 3,6",
+    [")"] = "1,0 3,2 3,4 1,6",
+    ["<"] = "3,1 1,3 3,5",
+    [">"] = "1,1 3,3 1,5",
+    ["="] = "0.5,2 3.5,2|0.5,4 3.5,4",
+    [" "] = "",
+}
+```
+
+### Parsing the strings once
+
+At startup, each string is turned into lists of numbers using Lua's **pattern matching**. `gmatch` loops over every match of a pattern in a string:
+
+<div class="codefile">src/neon.lua <span>17-vector-font</span></div>
+
+```lua
+local GLYPHS = {}
+for ch, src in pairs(GLYPH_SRC) do
+    local strokes = {}
+    for part in src:gmatch("[^|]+") do
+        local pts = {}
+        for x, y in part:gmatch("(-?[%d%.]+),(-?[%d%.]+)") do
+            pts[#pts + 1] = tonumber(x)
+            pts[#pts + 1] = tonumber(y)
+        end
+        if #pts >= 4 then strokes[#strokes + 1] = pts end
+    end
+    GLYPHS[ch] = strokes
+end
+```
+
+- `"[^|]+"` means "one or more characters that aren't `|`", so it yields each stroke in turn.
+- `"(-?[%d%.]+),(-?[%d%.]+)"` captures two numbers separated by a comma. `%d` is a digit, `%.` a literal dot, and the brackets `( )` mark the parts to capture. So `x` and `y` come out as separate strings.
+
+Doing this once, at startup, means drawing text never has to parse anything.
+
+### Drawing text
+
+<div class="codefile">src/neon.lua <span>17-vector-font</span></div>
+
+```lua
+function Neon.textWidth(str, size, spacing)
+    spacing = spacing or 2
+    return (#str * (4 + spacing) - spacing) * size / 6
+end
+
+local buf = {}
+
+-- Draws str with its cap height = size. align: "left" (default), "center", "right".
+function Neon.text(str, x, y, size, r, g, b, a, align, spacing, width)
+    str = string.upper(tostring(str))
+    spacing = spacing or 2
+    width = width or math.min(3.2, math.max(1.3, size / 12))
+    local s = size / 6
+    local w = Neon.textWidth(str, size, spacing)
+    if align == "center" then
+        x = x - w / 2
+    elseif align == "right" then
+        x = x - w
+    end
+
+    for i = 1, #str do
+        local glyph = GLYPHS[str:sub(i, i)]
+        if glyph then
+            local ox = x + (i - 1) * (4 + spacing) * s
+            for _, pts in ipairs(glyph) do
+                local n = #pts
+                for k = 1, n, 2 do
+                    buf[k] = ox + pts[k] * s
+                    buf[k + 1] = y + pts[k + 1] * s
+                end
+                for k = #buf, n + 1, -1 do buf[k] = nil end
+                Neon.lines(buf, r, g, b, a, width, false)
+            end
+        end
+    end
+end
+```
+
+- `size` is the height of a capital letter in pixels, so each grid unit is `size / 6` pixels.
+- Each character takes 4 units plus `spacing` (default 2), which is how `textWidth` can work out the width without drawing anything. That's what makes centring and right-aligning possible.
+- `buf` is one table reused for every stroke. The loop `for k = #buf, n + 1, -1 do buf[k] = nil end` trims off leftover points from a longer previous stroke.
+
+### Swapping it in
+
+Chapter 10 routed all text through `drawText(str, x, y, size, r, g, b, a, align)`, and `Neon.text` takes the same arguments (plus optional spacing). So the swap is: delete the `drawText` function and its `fonts` table, then replace every `drawText(` with `Neon.text(`. VS Code's **Find and Replace** (`Ctrl+H`) does it in one go.
+
+![The glowing vector font on the title screen](images/ch17.png)
+
+> **Try it:** Add glyphs for `#`, `*` and `%` to `GLYPH_SRC`, then use them somewhere. Try making the letters italic by adding `- pts[k + 1] * s * 0.2` to the x coordinate in `Neon.text`.
+
+<div class="part">Part 5 · Finishing the game</div>
+
+## 18. Saucers, hyperspace and smart bombs
+
+The final chapter of new features. Its checkpoint is the **finished game** at the top of the project (`main.lua`, `conf.lua`, `src/`, `lib/`). Open `src/game.lua` there and follow along.
+
+### Flying saucers
+
+Saucers are described with a data table, just like asteroids:
+
+<div class="codefile">src/game.lua <span>finished game</span></div>
+
+```lua
+local UFO = {
+    big = { radius = 22, score = 200, speed = 120, fireInterval = 1.1, color = { 0.35, 1, 0.45 }, sound = "ufo_big" },
+    small = { radius = 13, score = 1000, speed = 170, fireInterval = 0.85, color = { 1, 0.4, 0.25 }, sound = "ufo_small" },
+}
+```
+
+<div class="codefile">src/game.lua <span>finished game</span></div>
+
+```lua
+local function spawnUfo()
+    local smallChance = math.min(0.8, 0.1 + (S.wave - 1) * 0.12 + S.score / 50000)
+    local def = rnd() < smallChance and UFO.small or UFO.big
+    local dir = rnd() < 0.5 and 1 or -1
+    S.ufo = {
+        def = def, dir = dir,
+        x = dir == 1 and -def.radius or W + def.radius,
+        y = 80 + rnd() * (H - 160),
+        vx = dir * def.speed * (1 + (S.wave - 1) * 0.05), vy = 0,
+        turnTimer = 1, fireTimer = 1,
+    }
+    Sfx.loop(def.sound, true)
+end
+
+local function updateUfo(dt)
+    local u = S.ufo
+    u.x = u.x + u.vx * dt
+    u.y = (u.y + u.vy * dt) % H
+
+    u.turnTimer = u.turnTimer - dt
+    if u.turnTimer <= 0 then
+        u.turnTimer = 0.8 + rnd() * 1.2
+        u.vy = ({ -1, 0, 0, 1 })[rnd(1, 4)] * math.abs(u.vx) * 0.7
+    end
+
+    local r = u.def.radius
+    if (u.dir == 1 and u.x > W + r) or (u.dir == -1 and u.x < -r) then
+        Sfx.loop(u.def.sound, false)
+        S.ufo = nil
+        return
+    end
+    Sfx.setLoopPan(u.def.sound, pan(u.x))
+
+    u.fireTimer = u.fireTimer - dt
+    if u.fireTimer <= 0 then
+        u.fireTimer = u.def.fireInterval * (0.8 + rnd() * 0.4)
+        local ang
+        local s = S.ship
+        if u.def == UFO.small and s and s.alive then
+            local _, dx, dy = wrappedDist(u.x, u.y, s.x, s.y)
+            local err = math.max(0.04, 0.3 - (S.wave - 1) * 0.04 - S.score / 80000)
+            ang = math.atan2(dy, dx) + (rnd() - 0.5) * 2 * err
+        else
+            ang = rnd() * TAU
+        end
+        S.bullets[#S.bullets + 1] = {
+            x = u.x, y = u.y,
+            vx = math.cos(ang) * UFO_BULLET_SPEED, vy = math.sin(ang) * UFO_BULLET_SPEED,
+            life = UFO_BULLET_LIFE, enemy = true,
+        }
+        Sfx.play("ufo_fire", pan(u.x))
+    end
+end
+```
+
+- The **small saucer becomes more likely** as the wave and score go up: `0.1 + (S.wave - 1) * 0.12 + S.score / 50000`, capped at 80%.
+- Saucers fly across the screen once, changing vertical direction every second or so, and are removed when they leave the far side.
+- **Aiming:** `math.atan2(dy, dx)` converts a direction (dx, dy) into an angle. It's the opposite of `cos`/`sin`. The small saucer aims at the ship, plus a random error that shrinks as you get better. The big saucer just fires at random.
+- The saucer's warbling sound loop is panned to follow it across the screen.
+
+Enemy bullets share the `S.bullets` list, marked with `enemy = true`. Collisions now cover every pair that matters:
+
+<div class="codefile">src/game.lua <span>finished game</span></div>
+
+```lua
+local function collide()
+    local s = S.ship
+    local shipAlive = s and s.alive
+
+    for i = #S.bullets, 1, -1 do
+        local b = S.bullets[i]
+        local hit = false
+        for j = #S.asteroids, 1, -1 do
+            local a = S.asteroids[j]
+            if wrappedDist(b.x, b.y, a.x, a.y) < a.radius * 0.9 + 2 then
+                destroyAsteroid(j, not b.enemy, true, false, b.vx, b.vy)
+                hit = true
+                break
+            end
+        end
+        if not hit and not b.enemy and S.ufo
+            and wrappedDist(b.x, b.y, S.ufo.x, S.ufo.y) < S.ufo.def.radius + 2 then
+            destroyUfo(true)
+            hit = true
+        end
+        if not hit and b.enemy and shipAlive and s.invuln <= 0
+            and wrappedDist(b.x, b.y, s.x, s.y) < SHIP_RADIUS then
+            killShip()
+            shipAlive = false
+            hit = true
+        end
+        if hit then table.remove(S.bullets, i) end
+    end
+
+    if shipAlive and s.invuln <= 0 then
+        for j = #S.asteroids, 1, -1 do
+            local a = S.asteroids[j]
+            if wrappedDist(s.x, s.y, a.x, a.y) < a.radius * 0.85 + SHIP_RADIUS then
+                destroyAsteroid(j, true, true, false, s.vx, s.vy)
+                killShip()
+                shipAlive = false
+                break
+            end
+        end
+    end
+
+    local u = S.ufo
+    if u then
+        if shipAlive and s.invuln <= 0 and wrappedDist(s.x, s.y, u.x, u.y) < u.def.radius + SHIP_RADIUS then
+            destroyUfo(true)
+            killShip()
+        else
+            for j = #S.asteroids, 1, -1 do
+                local a = S.asteroids[j]
+                if wrappedDist(u.x, u.y, a.x, a.y) < a.radius * 0.85 + u.def.radius then
+                    destroyAsteroid(j, false, true)
+                    destroyUfo(false)
+                    break
+                end
+            end
+        end
+    end
+end
+```
+
+### Hyperspace
+
+Press ↓ (or S or Shift) to vanish and reappear somewhere random. The trick is picking a *safe* somewhere: try up to 40 random spots, and use the first one that isn't near an asteroid:
+
+<div class="codefile">src/game.lua <span>finished game</span></div>
+
+```lua
+local function hyperspace()
+    local s = S.ship
+    if not s or not s.alive or s.hyperTimer > 0 then return end
+    local c = SHIP_COLOR
+    Fx.burst(s.x, s.y, 36, 60, 280, 0.2, 0.5, c[1], c[2], c[3])
+    Fx.ring(s.x, s.y, 60, 0.3, c[1], c[2], c[3], 2)
+
+    local x, y
+    for _ = 1, 40 do
+        x, y = 60 + rnd() * (W - 120), 60 + rnd() * (H - 120)
+        if isClear(x, y, 110) then break end
+    end
+    s.x, s.y = x, y
+    s.vx, s.vy = s.vx * 0.2, s.vy * 0.2
+    s.hyperTimer = HYPER_COOLDOWN
+    s.invuln = math.max(s.invuln, 0.4)
+
+    Fx.implode(x, y, 100, 40, 0.25, c[1], c[2], c[3])
+    Fx.ring(x, y, 80, 0.4, 1, 1, 1, 2)
+    Sfx.play("hyperspace", pan(x))
+end
+```
+
+### The smart bomb
+
+A nod to *Defender*. Press B for an expanding shockwave that destroys everything it touches. It's also the game's biggest explosion, so it gets the biggest shake and a screen flash:
+
+<div class="codefile">src/game.lua <span>finished game</span></div>
+
+```lua
+local function smartBomb()
+    local s = S.ship
+    if not s or not s.alive or S.bombs <= 0 or S.bomb then return end
+    S.bombs = S.bombs - 1
+    S.bomb = { x = s.x, y = s.y, r = 0 }
+
+    Fx.flash = 0.45
+    Fx.shake(0.6)
+    Fx.burst(s.x, s.y, 80, 300, 1000, 0.3, 0.9, 0.75, 0.95, 1)
+    Fx.glowFlash(s.x, s.y, 220, 0.5, 0.6, 0.9, 1)
+    Sfx.play("smart_bomb")
+
+    for i = #S.bullets, 1, -1 do
+        local b = S.bullets[i]
+        if b.enemy then
+            Fx.burst(b.x, b.y, 6, 30, 120, 0.1, 0.3, UFO_BULLET_COLOR[1], UFO_BULLET_COLOR[2], UFO_BULLET_COLOR[3])
+            table.remove(S.bullets, i)
+        end
+    end
+end
+```
+
+<div class="codefile">src/game.lua <span>finished game</span></div>
+
+```lua
+local function updateBomb(dt)
+    local b = S.bomb
+    b.r = b.r + BOMB_SPEED * dt
+    for i = #S.asteroids, 1, -1 do
+        local a = S.asteroids[i]
+        if a.bomb ~= b and wrappedDist(b.x, b.y, a.x, a.y) < b.r + a.radius then
+            if a.size == 3 then
+                -- big rocks shatter; the shockwave flings the pieces outward and spares them
+                destroyAsteroid(i, true, true)
+                for k = #S.asteroids - 1, #S.asteroids do
+                    local child = S.asteroids[k]
+                    local d, dx, dy = wrappedDist(b.x, b.y, child.x, child.y)
+                    d = math.max(d, 1)
+                    child.vx = child.vx + dx / d * 160
+                    child.vy = child.vy + dy / d * 160
+                    child.bomb = b
+                end
+            else
+                destroyAsteroid(i, true, false)
+            end
+        end
+    end
+    if S.ufo and wrappedDist(b.x, b.y, S.ufo.x, S.ufo.y) < b.r + S.ufo.def.radius then
+        destroyUfo(true)
+    end
+    if b.r > BOMB_RANGE then S.bomb = nil end
+end
+```
+
+The shockwave is a circle whose radius `b.r` grows 1,500 pixels per second. Anything whose distance from the centre is less than `b.r` plus its own radius has been hit. The first version destroyed every asteroid outright, and a single bomb could clear a whole wave in a second. That was too strong, so now **large asteroids shatter** instead: their pieces are flung outward and tagged `child.bomb = b` so the same shockwave doesn't hit them again.
+
+### Pause, gamepads and focus
+
+**Pause** (P or Esc) stops updating the game and pauses all sound. `love.audio.pause()` pauses every playing Source and returns a list of them, so unpausing can resume exactly those:
+
+<div class="codefile">src/game.lua <span>finished game</span></div>
+
+```lua
+local function togglePause()
+    S.paused = not S.paused
+    if S.paused then
+        S.pausedSources = love.audio.pause()
+        Sfx.play("blip")
+    else
+        if S.pausedSources then love.audio.play(S.pausedSources) end
+        S.pausedSources = nil
+    end
+end
+```
+
+**Gamepads** work alongside the keyboard. LÖVE maps most controllers to a standard Xbox-style layout, so button names like `"a"` and `"dpleft"` work on any pad:
+
+<div class="codefile">src/game.lua <span>finished game</span></div>
+
+```lua
+local function gamepad()
+    local j = love.joystick.getJoysticks()[1]
+    return j and j:isGamepad() and j or nil
+end
+
+local function controls()
+    local kb = love.keyboard.isDown
+    local left, right = kb("left", "a"), kb("right", "d")
+    local thrust, firing = kb("up", "w"), kb("space")
+    local j = gamepad()
+    if j then
+        local lx = j:getGamepadAxis("leftx")
+        left = left or lx < -0.35 or j:isGamepadDown("dpleft")
+        right = right or lx > 0.35 or j:isGamepadDown("dpright")
+        thrust = thrust or j:isGamepadDown("dpup") or j:getGamepadAxis("triggerright") > 0.3
+            or j:isGamepadDown("rightshoulder")
+        firing = firing or j:isGamepadDown("a")
+    end
+    return left, right, thrust, firing
+end
+```
+
+In `main.lua`, `love.gamepadpressed` forwards button presses, and `love.focus` **auto-pauses** when the player switches to another window. It's a small courtesy that players really notice.
+
+![The finished game](images/ch18.png)
+
+**Congratulations: you've built the whole game.** Run `love .` at the top of the project and play the finished version.
+
+## 19. Debugging and testing
+
+Every programmer spends a lot of time working out why something doesn't work. Here's how to get good at it in LÖVE.
+
+### Reading the error screen
+
+```
+Error
+
+src/game.lua:212: attempt to perform arithmetic on a nil value (field 'radius')
+
+Traceback
+
+src/game.lua:212: in function 'destroyAsteroid'
+src/game.lua:587: in function 'collide'
+src/game.lua:668: in function 'updatePlay'
+...
+```
+
+- The **first line** says where it happened (file:line) and what went wrong.
+- The **traceback** is the chain of calls that led there, most recent first. Here, `updatePlay` called `collide`, which called `destroyAsteroid`, which crashed. The bug is often a few steps up the chain, where the bad value came from.
+
+### The errors you'll see most
+
+| Message | What it usually means |
+|---|---|
+| `attempt to call a nil value (global 'foo')` | `foo` doesn't exist *here*: a typo, or a `local function foo` defined **below** this line |
+| `attempt to index a nil value (local 'ship')` | you wrote `ship.x` while `ship` is `nil` |
+| `attempt to perform arithmetic on a nil value (field 'speed')` | a maths operation on a missing field, often a misspelled name |
+| `attempt to compare number with nil` | same idea, in `<` or `>` |
+| `attempt to concatenate a nil value` | `"Score: " .. score` while `score` is `nil`. Use `tostring(score)` |
+| `'end' expected (to close 'function' at line 40)` | a missing `end`. Line 40 is where the unclosed block *starts* |
+| `unexpected symbol near '='` | often `+=`, which Lua doesn't have |
+
+### A real case study
+
+The very first version of this game was generated by a small AI model running locally. It *looked* plausible, but it didn't run at all. Its bugs make a great checklist, because they're exactly what beginners (and AIs) get wrong:
+
+```lua
+player.vx += math.cos(math.rad(player.angle)) * PLAYER_THRUST * dt   -- no += in Lua
+if key == love.keys.space then                                       -- no love.keys: keys are strings, "space"
+function love.keyPressed(key)                                        -- wrong case: LÖVE calls love.keypressed
+love.graphics.font = love.graphics.newFont(28)                       -- not how fonts work, and made every frame
+love.graphics.fillRect(0, 0, SCREEN.width, SCREEN.height)            -- not a LÖVE function: rectangle("fill", ...)
+```
+
+It also called `local function`s from code written *above* them, stored asteroid sizes as numbers but looked them up by name (`"large"`), and wrote particles into a table that didn't exist. None of these are hard to fix once you know how to read the errors, and callback names are case-sensitive, so check them against the [LÖVE wiki](https://love2d.org/wiki).
+
+> **Gotcha:** When LÖVE doesn't call your callback at all (nothing happens, and there's no error), check the spelling and capitalisation: `love.keypressed`, `love.mousepressed`, `love.gamepadpressed`. A misspelled callback is just a function nobody calls.
+
+### print debugging
+
+The simplest tool is still the best one: `print` values and watch the console (run with `lovec` on Windows):
+
+```lua
+print("asteroids:", #S.asteroids, "bullets:", #S.bullets)
+```
+
+Printing every frame floods the console, so print when something *happens*, or only every 60th frame.
+
+### An on-screen debug overlay
+
+Add a toggle to `main.lua` that draws useful numbers on top of everything:
+
+```lua
+local showDebug = false
+
+-- in love.keypressed, before Game.keypressed:
+if key == "f3" then showDebug = not showDebug return end
+
+-- at the very end of love.draw, after glow:finish(...):
+if showDebug then
+    love.graphics.setColor(1, 1, 1)
+    love.graphics.print("FPS " .. love.timer.getFPS(), 10, 10)
+    love.graphics.print("Lua memory " .. math.floor(collectgarbage("count")) .. " KB", 10, 30)
+end
+```
+
+If the memory number climbs forever, something is creating objects and never letting them go, like fonts made every frame.
+
+### Testing without playing
+
+While building this game, every checkpoint was tested by a small separate LÖVE project. It loads the game's `main.lua`, replaces `love.keyboard.isDown` with a function that "holds" keys on a timer, runs a few thousand frames, and saves screenshots with `love.graphics.captureScreenshot`. It also replaces `love.errorhandler` so an error prints and exits instead of showing the blue screen. That's how the canvas bug in Chapter 14 was caught and confirmed fixed.
+
+You don't need this for a small game, but it's good to know that game code can be tested automatically too.
+
+## 20. Sharing your game
+
+### A .love file
+
+A `.love` file is just a **zip of your game folder**, renamed, with `main.lua` at the top level of the zip (not inside a subfolder). Anyone with LÖVE installed can run it.
+
+On Windows, in PowerShell, from your project folder:
+
+```powershell
+Compress-Archive -Path main.lua, conf.lua, src, lib -DestinationPath NeonAsteroids.zip
+Rename-Item NeonAsteroids.zip NeonAsteroids.love
+love NeonAsteroids.love
+```
+
+On macOS or Linux:
+
+```bash
+zip -9 -r NeonAsteroids.love main.lua conf.lua src lib
+love NeonAsteroids.love
+```
+
+List only what the game needs. Leave out the `tutorial` and `backup` folders and anything else that's just for you.
+
+### A Windows .exe
+
+For friends who don't have LÖVE, you can **fuse** your `.love` onto the end of `love.exe` to make one program:
+
+```powershell
+cmd /c 'copy /b "C:\Program Files\LOVE\love.exe"+NeonAsteroids.love NeonAsteroids.exe'
+```
+
+Put `NeonAsteroids.exe` in a folder together with the `.dll` files from `C:\Program Files\LOVE` (`love.dll`, `lua51.dll`, `SDL2.dll`, `OpenAL32.dll`, `mpg123.dll`, `msvcp120.dll`, `msvcr120.dll`) and LÖVE's `license.txt`, then zip that folder up and share it. A fused game saves its files to `%APPDATA%\neon-asteroids` instead of the `LOVE` subfolder.
+
+The [LÖVE wiki's *Game Distribution* page](https://love2d.org/wiki/Game_Distribution) covers macOS apps, Linux and more. There are also community projects that run LÖVE games in a web browser, but they have limitations (shaders and audio can behave differently), so test carefully.
+
+## 21. Where to go next
+
+You now know the core of 2D game programming: the game loop, input, movement, collisions, state, and a toolbox of effects that most games use. Some ideas to take it further, roughly from easiest to hardest:
+
+- **Combo multiplier:** destroying asteroids quickly one after another raises a score multiplier shown in the HUD.
+- **Shield:** hold a key to raise a shield that drains an energy bar.
+- **Power-ups:** destroyed asteroids occasionally drop a glowing pickup (triple shot, rapid fire, extra bomb).
+- **A new enemy:** a mine that drifts toward the ship, or a "splitter" asteroid that breaks into four.
+- **Two players** on one keyboard, co-op or versus.
+- **Settings screen:** volume, bloom strength, screen shake on/off. Accessibility matters, and some players get motion sick from shake.
+- **Touch controls** for tablets, using `love.touchpressed`.
+
+### Resources
+
+- **[LÖVE wiki](https://love2d.org/wiki)**: the official reference for every function. Keep it open while you code.
+- **[Sheepolution's *How to LÖVE*](https://sheepolution.com/learn)**: a friendly, thorough beginner book, great for going deeper on the basics.
+- **[Programming in Lua](https://www.lua.org/pil/contents.html)**: the free online first edition, written by Lua's creator. It's older but still accurate for the Lua that LÖVE uses.
+- **[awesome-love2d](https://github.com/love2d-community/awesome-love2d)**: a big list of libraries (cameras, tweening, collision, UI…).
+- **[retro-starfield-starter-kit](https://github.com/pmirvine/retro-starfield-starter-kit)**: the starfield library from Chapter 16, plus more example games.
+- The **LÖVE Discord and forums**, linked from love2d.org, for when you're stuck.
+
+## Appendix A: LÖVE functions used in this game
+
+| Function | What it does |
+|---|---|
+| `love.load / update(dt) / draw` | the main callbacks (Chapters 3 and 5) |
+| `love.keypressed(key, scancode, isrepeat)` | a key went down |
+| `love.keyboard.isDown(...)` | is any of these keys held right now? |
+| `love.gamepadpressed`, `love.joystick.getJoysticks()` | gamepad input |
+| `love.resize(w, h)`, `love.focus(f)` | window resized / focus gained or lost |
+| `love.graphics.setColor(r, g, b, a)` | colour for what's drawn next (0–1) |
+| `love.graphics.line / polygon / circle / rectangle` | draw shapes (`"line"` or `"fill"`) |
+| `love.graphics.print / printf` | draw text (`printf` can wrap and align) |
+| `love.graphics.newFont(size)`, `setFont` | create and select fonts |
+| `love.graphics.setLineWidth / setLineStyle / setLineJoin` | how lines look |
+| `love.graphics.setBlendMode("alpha" / "add" / "replace")` | how new pixels combine with old ones |
+| `love.graphics.push / pop / translate / rotate / scale / origin` | move, turn and scale everything drawn after |
+| `love.graphics.setScissor(x, y, w, h)` | only draw inside a rectangle |
+| `love.graphics.newCanvas`, `setCanvas`, `clear` | draw into off-screen images |
+| `love.graphics.newShader`, `setShader`, `shader:send` | GPU effects |
+| `love.image.newImageData`, `love.graphics.newImage` | create images in code |
+| `love.math.random`, `love.math.noise` | random numbers and smooth noise |
+| `love.sound.newSoundData`, `love.audio.newSource` | create and play sounds |
+| `love.audio.pause / play / stop / setVolume` | control all sounds at once |
+| `love.filesystem.read / write` | save and load files |
+| `love.window.setFullscreen`, `love.window.setTitle` | window control |
+| `love.timer.getFPS()` | frames per second |
+| `love.event.quit()` | close the game |
+
+## Appendix B: Glossary
+
+- **Additive blending**: drawing mode where colours add together, like light. Overlaps get brighter.
+- **Attract mode**: the self-playing demo behind an arcade game's title screen.
+- **Bloom**: the glow around bright light, made by blurring bright parts of the image and adding them back.
+- **Callback**: a function you write that LÖVE calls for you at the right time.
+- **Canvas**: an off-screen image you can draw into.
+- **dt (delta time)**: seconds since the previous frame. Multiply speeds by it.
+- **Easing**: a curve that makes motion start or stop smoothly instead of linearly.
+- **Frame**: one pass of update-then-draw, about 1/60 of a second.
+- **Garbage collector**: the part of Lua that frees tables you're no longer using.
+- **GLSL**: the language shaders are written in.
+- **Hitstop**: a very short freeze on impact that makes hits feel solid.
+- **HSV**: describing colours by hue, saturation and value (brightness).
+- **Letterboxing**: black bars that keep a game's shape when the window is a different shape.
+- **Local**: a variable visible only inside its file or function.
+- **Module**: a Lua file that returns a table, loaded with `require`.
+- **Parallax**: distant things moving less than near things, giving a sense of depth.
+- **Particle**: a tiny, short-lived visual object. Many together make sparks, smoke and fire.
+- **Radian**: the maths unit for angles. A full turn is 2π.
+- **Sample / sample rate**: one number in a digital sound wave / how many samples per second.
+- **Shader**: a small program run on the graphics card for every pixel.
+- **State machine**: a set of modes plus clear rules for moving between them.
+- **Table**: Lua's only data structure, used as both lists and records.
+- **Trauma**: a 0–1 value that drives screen shake. Its square gives the shake amount.
+- **Velocity**: speed with a direction, stored as `(vx, vy)`.
